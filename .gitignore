@@ -1,7 +1,8 @@
 # ── NDA (legalmente vinculante) — NUNCA versionar ──────────────────────────
 # Videos crudos de SoccerNet, frames extraídos, datos y modelos.
-data/
-models/
+# Anclados a la raíz (/) para NO ignorar los paquetes de código src/data y src/models.
+/data/
+/models/
 .env
 .env.*
 !.env.example
