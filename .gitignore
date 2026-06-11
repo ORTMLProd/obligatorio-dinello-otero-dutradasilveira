@@ -1,0 +1,45 @@
+# ── NDA (legalmente vinculante) — NUNCA versionar ──────────────────────────
+# Videos crudos de SoccerNet, frames extraídos, datos y modelos.
+data/
+models/
+.env
+.env.*
+!.env.example
+# Formatos de video
+*.mkv
+*.mp4
+*.avi
+*.mov
+*.webm
+# Imágenes / arrays (frames extraídos). Nota: en Fase 3 acotar para permitir
+# assets legítimos del frontend (ver report/bitacora.md).
+*.jpg
+*.jpeg
+*.png
+*.bmp
+*.npy
+*.npz
+
+# ── ML / runtime ────────────────────────────────────────────────────────────
+mlruns/
+mlflow.db
+
+# ── Python ──────────────────────────────────────────────────────────────────
+__pycache__/
+*.py[cod]
+.venv/
+.pytest_cache/
+.ruff_cache/
+*.egg-info/
+
+# ── Node / frontend ─────────────────────────────────────────────────────────
+node_modules/
+dist/
+
+# ── Claude Code (local, por máquina) ────────────────────────────────────────
+.claude/settings.local.json
+
+# ── OS / editores ───────────────────────────────────────────────────────────
+.DS_Store
+.idea/
+.vscode/
