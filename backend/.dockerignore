@@ -1,0 +1,10 @@
+# Keep the build context (and final image) small and host-independent.
+.venv/
+__pycache__/
+*.py[cod]
+.pytest_cache/
+.ruff_cache/
+.git/
+tests/
+notebooks/
+*.md
