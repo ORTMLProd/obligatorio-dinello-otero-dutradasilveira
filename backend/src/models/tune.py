@@ -157,7 +157,11 @@ def _fit_bundle(
         model=estimator,
         preprocessor=preprocessor,
         classes=classes,
-        tabular_columns=list(selected),
+        # The request contract is always the full column set — the caller provides all of
+        # them. Feature selection drops columns *inside* the fitted preprocessor, so the API
+        # frame (built from tabular_columns) must keep every TABULAR_COLUMNS or assemble_matrix
+        # KeyErrors at serving. Which subset the model uses is traced via MLflow, not here.
+        tabular_columns=list(TABULAR_COLUMNS),
         embedding_dim=embedding_dim,
         model_type=spec.type,
         model_version=version,
@@ -250,9 +254,11 @@ def run_tuning(train_cfg: TrainConfig, dataset_cfg: DatasetConfig) -> ModelBundl
     mlflow.set_experiment("optimization-v1")
     is_registry_capable = not train_cfg.mlflow.tracking_uri.startswith("file")
 
-    for name, bundle, latency in (
-        ("baseline", baseline_bundle, baseline_lat),
-        ("tuned-best", tuned_bundle, tuned_lat),
+    # The bundle's tabular_columns is always the full request contract; the *used* subset
+    # (feature selection) is reported separately, per model.
+    for name, bundle, latency, selected in (
+        ("baseline", baseline_bundle, baseline_lat, TABULAR_COLUMNS),
+        ("tuned-best", tuned_bundle, tuned_lat, best_selected),
     ):
         with mlflow.start_run(run_name=name):
             mlflow.log_params(
@@ -260,8 +266,8 @@ def run_tuning(train_cfg: TrainConfig, dataset_cfg: DatasetConfig) -> ModelBundl
                     "model_type": cfg.target_model,
                     "seed": seed,
                     "use_embedding": use_embedding,
-                    "n_features": len(bundle.tabular_columns),
-                    "selected_columns": ",".join(bundle.tabular_columns),
+                    "n_features": len(selected),
+                    "selected_columns": ",".join(selected),
                     **(bundle.model.get_params() if hasattr(bundle.model, "get_params") else {}),
                 }
             )
@@ -273,12 +279,12 @@ def run_tuning(train_cfg: TrainConfig, dataset_cfg: DatasetConfig) -> ModelBundl
     print(
         f"\nbaseline  test macro-F1={baseline_bundle.metrics['macro_f1']:.3f} "
         f"p50={baseline_lat['p50_ms']:.2f}ms p95={baseline_lat['p95_ms']:.2f}ms "
-        f"(features={len(baseline_bundle.tabular_columns)})"
+        f"(features={len(TABULAR_COLUMNS)})"
     )
     print(
         f"tuned     test macro-F1={tuned_bundle.metrics['macro_f1']:.3f} "
         f"p50={tuned_lat['p50_ms']:.2f}ms p95={tuned_lat['p95_ms']:.2f}ms "
-        f"(features={len(tuned_bundle.tabular_columns)}: {', '.join(tuned_bundle.tabular_columns)})"
+        f"(features={len(best_selected)}: {', '.join(best_selected)})"
     )
     print(f"Δ macro-F1 = {delta_f1:+.3f}  |  best params: {best_params}")
 

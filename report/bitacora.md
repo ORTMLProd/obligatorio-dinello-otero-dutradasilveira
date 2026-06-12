@@ -370,3 +370,41 @@ cada decisión.
 Bloque desarrollado con asistencia de Claude Code (diseño del enfoque, generación de código y
 tests con TDD, ejecución de la búsqueda y redacción de esta entrada). El estudiante revisó y
 validó cada decisión y es responsable de poder defenderla.
+
+---
+
+## 2026-06-12 — Fix: contrato de `/predict` vs. feature selection interna
+
+### Qué se hizo
+- Se corrigió una **regresión de serving** introducida por la Fase 3.1: con el modelo
+  tuneado (5 de 8 features), `POST /predict` rompía con
+  `KeyError: ['minute', 'score_diff', 'events_so_far'] not in index`.
+- Causa raíz: `tune.py` guardaba en el bundle `tabular_columns = columnas_seleccionadas` (5).
+  El router arma el DataFrame del request a partir de `bundle.tabular_columns`, y
+  `assemble_matrix` exige las 8 columnas → faltaban 3 → excepción.
+- Fix: `tabular_columns` vuelve a ser **el contrato completo del request** (las 8 que el
+  cliente siempre envía); la feature selection vive **solo dentro del preprocesador fiteado**.
+- Test de regresión que reproduce el camino del router (frame armado desde
+  `bundle.tabular_columns` → `predict_frame`); falla antes del fix, pasa después. Verificado
+  además end-to-end con `TestClient`: `/predict` → 200 con `v1-tuned-xgboost`.
+
+### Por qué se hizo así / concepto del curso
+- **Contrato de la API estable vs. internals del modelo** (contrato de API + training-serving
+  skew): lo que el cliente debe enviar no puede cambiar porque internamente el modelo use
+  menos features. El contrato es el schema pydantic (8 campos); la selección es un detalle de
+  preprocesamiento que el bundle encapsula.
+- **El bug se coló porque los tests de 3.1 no ejercían el camino del router con un bundle de
+  subconjunto.** Lección: testear en la *frontera de serving*, no solo las piezas. El nuevo
+  test cubre ese hueco.
+
+### Requerimiento de la consigna que cubre
+- Sostiene el mínimo **"API online + batch"** funcionando con el modelo optimizado, y el
+  desafío **training-serving skew** (contrato coherente train/serving).
+
+### Referencias al código
+- Fix: `backend/src/models/tune.py` (`_fit_bundle`, reporte de selección en `run_tuning`).
+- Test: `backend/tests/test_tune.py::test_tuned_bundle_serves_with_full_request_contract`.
+
+### Uso de IA generativa
+Bug detectado y corregido con Claude Code (reproducción, diagnóstico por stack trace, test de
+regresión y fix con TDD). Revisado por el estudiante.
