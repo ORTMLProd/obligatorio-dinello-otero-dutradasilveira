@@ -1,0 +1,12 @@
+# Defensa en profundidad (NDA): si algún build usa la raíz como contexto, nunca
+# mandar datos, modelos ni secretos. Los builds reales usan ./backend y ./frontend,
+# cada uno con su propio .dockerignore.
+/data/
+/models/
+.env
+.env.*
+.git/
+**/node_modules
+**/.venv
+**/__pycache__
+**/dist
