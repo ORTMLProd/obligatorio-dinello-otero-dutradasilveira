@@ -1,0 +1,45 @@
+# ─────────────────────────────────────────────────────────────────────────────
+# Especificación del entrenamiento del baseline v0 (Fase 2 — end-to-end).
+#
+# Única fuente de verdad para `python -m src.models.train`. Sin números mágicos
+# en el código (convención del proyecto). El preprocesador se fitea SOLO con el
+# split train y se serializa junto al modelo (invariante 3, anti training-serving
+# skew); la API carga ese mismo bundle en serving.
+#
+# Estrategia v0: late fusion [tabular preprocesado ⊕ embedding ResNet pooled].
+# Se entrenan dos modelos y se compara; se exporta el mejor por macro-F1. Esto
+# prioriza cerrar el ciclo end-to-end por sobre el rendimiento (criterio de la
+# consigna) y aporta una discusión de alternativas para el informe.
+# ─────────────────────────────────────────────────────────────────────────────
+
+seed: 42
+
+# Se entrenan ambos y se compara en MLflow. LogReg = piso interpretable;
+# XGBoost = v0 real (maneja desbalance y no-linealidades del fusion).
+models:
+  - type: logistic_regression
+    params:
+      C: 1.0
+      max_iter: 1000
+      class_weight: balanced # invariante 5: el desbalance se maneja explícitamente
+  - type: xgboost
+    params:
+      max_depth: 6
+      n_estimators: 300
+      learning_rate: 0.1
+
+features:
+  use_embedding: true # late fusion tabular ⊕ resnet_pooled; false → baseline tabular-only
+  scale_numeric: true # StandardScaler en numéricas (aplica a LogReg; XGBoost lo ignora)
+
+# Trazabilidad de ML (electivo 1). La API NO depende de MLflow en runtime: carga el
+# bundle exportado de model_dir. tracking_uri se resuelve por env var en Docker.
+mlflow:
+  tracking_uri: ${MLFLOW_TRACKING_URI:-file:./mlruns}
+  experiment_name: baseline-v0
+  register_model: true # registra el mejor en el Model Registry
+
+# Rutas relativas a la raíz del repo. models/ está gitignored (se regenera con train).
+paths:
+  model_dir: "models/v0"
+  metrics_dir: "report/metrics"

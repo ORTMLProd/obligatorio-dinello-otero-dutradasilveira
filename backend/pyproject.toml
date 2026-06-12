@@ -10,6 +10,11 @@ dependencies = [
     "numpy>=2.0",
     "pandas>=2.2",
     "pyarrow>=17.0",
+    # Model + fitted preprocessor: the API loads the serialized bundle at startup, so
+    # these must be in the prod image (not just training). joblib (de)serializes it.
+    "scikit-learn>=1.5",
+    "xgboost>=2.1",
+    "joblib>=1.4",
 ]
 
 [dependency-groups]
@@ -27,6 +32,11 @@ dev = [
 # SoccerNet pulls heavy transitive deps not needed at serving time.
 data = [
     "SoccerNet>=0.1.60",
+]
+# Experiment tracking. Only needed at training time (logging runs + model registry),
+# never at serving: the API loads the exported bundle directly. Kept out of the API image.
+ml = [
+    "mlflow>=2.16",
 ]
 
 # This is an application, not an installable library: uv installs the dependencies
