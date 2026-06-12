@@ -8,6 +8,12 @@ services:
       - "8000:8000"
     environment:
       API_LOG_LEVEL: info
+      # The trained bundle is produced on the host and mounted in (models/ is gitignored,
+      # never baked into the image). Absolute path → used as-is by resolved_model_dir().
+      API_MODEL_DIR: /app/models/v0
+    volumes:
+      # Read-only mount of the exported model. If empty (before training) /predict → 503.
+      - ./models:/app/models:ro
     healthcheck:
       # `python` (urllib) instead of curl, which is not present in python:3.12-slim.
       test:
@@ -28,7 +34,21 @@ services:
       api:
         condition: service_healthy
 
-# Fase 2/3 — se agregan cuando corresponda (NO se levantan en Fase 0):
-#   mlflow:     servidor de tracking + model registry (Electivo 1)
+  # Trazabilidad de ML (Electivo 1). Sirve la UI en :5000 sobre el mismo backend store
+  # (sqlite) y artifact root que usa el training cuando se le apunta con
+  # MLFLOW_TRACKING_URI=http://localhost:5000. Runs + Model Registry persisten en el volumen.
+  mlflow:
+    build: ./mlflow
+    # Host 5500 (no 5000): en macOS el 5000 lo toma AirPlay/Control Center.
+    # El training apunta con MLFLOW_TRACKING_URI=http://localhost:5500.
+    ports:
+      - "5500:5000" # abrir http://localhost:5500
+    volumes:
+      - mlflow-data:/mlflow
+
+# Fase 3 — se agregan cuando corresponda:
 #   prometheus: scrapea /metrics de la API
 #   grafana:    dashboards de monitoreo
+
+volumes:
+  mlflow-data:
