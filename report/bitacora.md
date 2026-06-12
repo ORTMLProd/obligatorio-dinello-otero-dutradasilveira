@@ -408,3 +408,69 @@ validó cada decisión y es responsable de poder defenderla.
 ### Uso de IA generativa
 Bug detectado y corregido con Claude Code (reproducción, diagnóstico por stack trace, test de
 regresión y fix con TDD). Revisado por el estudiante.
+
+---
+
+## 2026-06-12 — Fase 3.2: Explicabilidad con SHAP (tabular + API)
+
+### Qué se hizo
+- Se implementó el electivo de **explicabilidad** con SHAP, en una única fuente reutilizable
+  (`backend/src/models/explain.py`) importada por **la API y el notebook** (invariante 3).
+- **TreeSHAP nativo de XGBoost** (`pred_contribs=True`) en vez de la librería `shap`: da los
+  mismos valores exactos pero sin meter `numba`/`llvmlite` en la imagen de producción. La lib
+  `shap` quedó **solo en el grupo dev**, para los gráficos del notebook.
+- **Tratamiento del embedding**: las 512 dims del ResNet (opacas) se agregan en un único
+  bucket `visual_embedding`; las features tabulares se reportan con su nombre (las one-hot de
+  `league` se pliegan a `league`). Resultado: una explicación legible visual-vs-contexto.
+- **Exposición en la API**: nuevo campo `explanations` en `PredictResponse` (aditivo, no rompe
+  el contrato de entrada). `/predict` lo devuelve por defecto; `/predict/batch` con
+  `?explain=true`. Se calcula todo el batch en una sola pasada de TreeSHAP. Gateado por tipo de
+  modelo (solo árboles); para LogReg el campo es `null`.
+- **Notebook** `backend/notebooks/explainability.ipynb` (ejecutado, con plots embebidos):
+  importancia global (media |SHAP|), reparto visual/tabular, y desglose de casos individuales.
+- Hallazgo (dataset v0, 72 ventanas de test): el **contexto tabular domina (~89% de la masa
+  |SHAP|)**, sobre todo `team_is_home` (separa `background`=-1 de los eventos); el embedding
+  visual aporta ~11%. Coherencia con 3.1: solo aparecen las 5 features que el modelo tuneado
+  conserva tras feature selection.
+
+### Por qué se hizo así / concepto del curso
+- **Explicabilidad / interpretabilidad** (electivo): SHAP reparte la predicción entre features
+  (valores de Shapley) — permite *defender* por qué el modelo decidió.
+- **No duplicar lógica** (invariante 3): la misma función explica en training-analysis y en
+  serving; si la API reimplementara SHAP, habría training-serving skew también en la explicación.
+- **Peso de dependencias en serving**: usar el TreeSHAP nativo mantiene la imagen liviana — una
+  decisión de MLOps (no todo lo que sirve para analizar debe ir al contenedor de producción).
+- **Agregar el embedding** evita 512 barras ilegibles: la explicación útil es visual-vs-tabular
+  + ranking de las tabulares interpretables.
+
+### Requerimiento de la consigna que cubre
+- Electivo **"Explicabilidad"**: SHAP integrado en notebook **y** en la API.
+- Refuerza el contrato de la API (`/predict` ahora explica sus predicciones, con ejemplo en
+  Swagger).
+
+### Alternativas consideradas y descartadas
+- **Librería `shap` en producción** → descartada: arrastra `numba`/`llvmlite` (imagen pesada).
+  El TreeSHAP nativo de XGBoost da los mismos valores sin ese costo.
+- **SHAP por cada una de las 512 dims** → descartado: ilegible, domina el ruido sobre la señal.
+  Se agregan en un bucket `visual_embedding`.
+- **Explicaciones siempre on en batch** → se dejó off por defecto (`?explain=true` para activar):
+  controla la latencia del camino de alto volumen.
+- **KernelExplainer / explainer agnóstico** → innecesario: el modelo es de árboles y TreeSHAP es
+  exacto y rápido.
+
+### Limitaciones asumidas
+- En dataset chico, `team_is_home` domina la explicación (separa background de eventos): es un
+  artefacto del subconjunto, a releer cuando escale `num_games` y entre la CNN v1.
+- TreeSHAP nativo aplica solo a modelos de árbol; si ganara LogReg, la API devuelve
+  `explanations: null` y la explicabilidad se haría con `shap` en el notebook.
+
+### Referencias al código
+- Lógica: `backend/src/models/explain.py`. API: `backend/src/api/schemas.py`,
+  `backend/src/api/routers/predict.py`. Deps: `backend/pyproject.toml` (`shap` en dev).
+- Notebook: `backend/notebooks/explainability.ipynb`.
+- Tests: `backend/tests/test_explain.py`, `backend/tests/test_predict.py`.
+
+### Uso de IA generativa
+Bloque desarrollado con asistencia de Claude Code (diseño, código y tests con TDD, construcción
+y ejecución del notebook, redacción de esta entrada). El estudiante revisó y validó cada
+decisión y es responsable de poder defenderla.

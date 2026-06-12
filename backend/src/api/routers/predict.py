@@ -18,9 +18,13 @@ from src.api.schemas import (
     PredictRequest,
     PredictResponse,
 )
+from src.models.explain import grouped_contributions
 from src.models.export import ModelBundle, predict_frame
 
 router = APIRouter(tags=["inference"])
+
+# Models whose predictions we can decompose with native TreeSHAP (see src.models.explain).
+_EXPLAINABLE_MODEL_TYPES = {"xgboost"}
 
 
 def _require_bundle(request: Request) -> ModelBundle:
@@ -54,28 +58,46 @@ def _to_frame_and_embedding(
     return frame, embedding
 
 
-def _to_responses(items: list[PredictRequest], bundle: ModelBundle) -> list[PredictResponse]:
+def _to_responses(
+    items: list[PredictRequest], bundle: ModelBundle, explain: bool
+) -> list[PredictResponse]:
     frame, embedding = _to_frame_and_embedding(items, bundle)
     labels, proba = predict_frame(bundle, frame, embedding)
+
+    # SHAP for the whole batch in a single pass (one TreeSHAP call covers all rows), only
+    # when requested and supported. Same preprocessing/inference path as predict_frame.
+    explanations: list[dict[str, float] | None] = [None] * len(items)
+    if explain and bundle.model_type in _EXPLAINABLE_MODEL_TYPES:
+        explanations = list(grouped_contributions(bundle, frame, embedding))
+
     return [
         PredictResponse(
             predicted_label=labels[i],
             probabilities=dict(zip(bundle.classes, proba[i].tolist(), strict=True)),
             model_version=bundle.model_version,
+            explanations=explanations[i],
         )
         for i in range(len(items))
     ]
 
 
 @router.post("/predict", response_model=PredictResponse)
-async def predict(req: PredictRequest, request: Request) -> PredictResponse:
-    """Classify a single window into one of the event classes (or background)."""
+async def predict(req: PredictRequest, request: Request, explain: bool = True) -> PredictResponse:
+    """Classify a single window into one of the event classes (or background).
+
+    Set ``?explain=false`` to skip the SHAP decomposition (lower latency).
+    """
     bundle = _require_bundle(request)
-    return _to_responses([req], bundle)[0]
+    return _to_responses([req], bundle, explain=explain)[0]
 
 
 @router.post("/predict/batch", response_model=BatchPredictResponse)
-async def predict_batch(req: BatchPredictRequest, request: Request) -> BatchPredictResponse:
-    """Classify a batch of windows in one call (synchronous in v0)."""
+async def predict_batch(
+    req: BatchPredictRequest, request: Request, explain: bool = False
+) -> BatchPredictResponse:
+    """Classify a batch of windows in one call (synchronous in v0).
+
+    SHAP is off by default for batch throughput; set ``?explain=true`` to include it.
+    """
     bundle = _require_bundle(request)
-    return BatchPredictResponse(predictions=_to_responses(req.items, bundle))
+    return BatchPredictResponse(predictions=_to_responses(req.items, bundle, explain=explain))
