@@ -35,7 +35,9 @@ features:
 # Trazabilidad de ML (electivo 1). La API NO depende de MLflow en runtime: carga el
 # bundle exportado de model_dir. tracking_uri se resuelve por env var en Docker.
 mlflow:
-  tracking_uri: ${MLFLOW_TRACKING_URI:-file:./mlruns}
+  # sqlite local por defecto (soporta Model Registry; MLflow 3 deprecó el file-store).
+  # En Docker se sobreescribe por env var apuntando al server (PR docker-compose).
+  tracking_uri: ${MLFLOW_TRACKING_URI:-sqlite:///mlflow.db}
   experiment_name: baseline-v0
   register_model: true # registra el mejor en el Model Registry
 
