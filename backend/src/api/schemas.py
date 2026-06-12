@@ -84,13 +84,38 @@ class PredictRequest(BaseModel):
 
 
 class PredictResponse(BaseModel):
-    """Predicted class, full per-class probabilities and the serving model version."""
+    """Predicted class, full per-class probabilities, model version and (optionally) SHAP.
 
-    model_config = ConfigDict(extra="forbid", protected_namespaces=())
+    ``explanations`` decomposes the prediction into per-feature contributions (TreeSHAP) for
+    the predicted class: each tabular feature by name, plus a single ``visual_embedding``
+    bucket aggregating the 512 ResNet dimensions (opaque individually). Positive values push
+    toward the predicted class. ``None`` when explanations are disabled or unavailable for the
+    model type.
+    """
+
+    model_config = ConfigDict(
+        extra="forbid",
+        protected_namespaces=(),
+        json_schema_extra={
+            "example": {
+                "predicted_label": "corner",
+                "probabilities": {
+                    "background": 0.07,
+                    "card": 0.03,
+                    "corner": 0.71,
+                    "goal": 0.05,
+                    "substitution": 0.14,
+                },
+                "model_version": "v1-tuned-xgboost-91c40640",
+                "explanations": {"visual_embedding": 1.42, "league": 0.31, "minute": -0.12},
+            }
+        },
+    )
 
     predicted_label: str
     probabilities: dict[str, float]
     model_version: str
+    explanations: dict[str, float] | None = None
 
 
 class BatchPredictRequest(BaseModel):
