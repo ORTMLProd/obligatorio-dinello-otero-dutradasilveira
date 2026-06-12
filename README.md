@@ -7,9 +7,10 @@ tipos de evento (`goal`, `card`, `substitution`, `corner`, `background`), combin
 
 Curso: Machine Learning en Producción — Máster, Universidad ORT Uruguay.
 
-> **Estado: Fase 0 (Setup).** El scaffolding del monorepo (backend FastAPI + frontend
-> React + Docker Compose) se desarrolla en la rama `feat/scaffold-fase-0`. El plan de
-> fases completo está en [CLAUDE.md](CLAUDE.md).
+> **Estado: Fase 0 (Setup) — completa.** Esqueleto del monorepo (backend FastAPI +
+> frontend React + Docker Compose) con un ciclo end-to-end "hello-world". Sin datos ni
+> modelo todavía (eso llega en Fase 1+). El plan de fases completo está en
+> [CLAUDE.md](CLAUDE.md).
 
 ## Política de datos (NDA)
 
@@ -22,5 +23,34 @@ propia contraseña del NDA. Detalle completo en [CLAUDE.md](CLAUDE.md).
 
 ## Cómo correr
 
-> Se completa al finalizar el scaffolding de la Fase 0: `docker compose up --build`
-> levantará la API y el frontend.
+### Todo el stack con Docker (recomendado)
+
+```bash
+docker compose up --build
+```
+
+Luego abrir **http://localhost:8080** — el frontend muestra el estado del backend.
+La API queda en http://localhost:8000 (con documentación Swagger en `/docs`).
+
+### Desarrollo local (sin Docker)
+
+```bash
+# Backend (Python 3.12, gestionado por uv)
+cd backend && uv sync && uv run fastapi dev src/api/main.py    # http://localhost:8000
+
+# Frontend (en otra terminal)
+cd frontend && npm install && npm run dev                      # http://localhost:5173
+```
+
+En dev, Vite proxea `/api` al backend (mismo patrón que nginx en producción), por lo
+que el código del frontend usa rutas relativas `/api/...` idénticas en ambos entornos.
+
+## Estructura
+
+```
+backend/   API FastAPI + (Fase 1+) datos, features, modelos
+frontend/  React (Vite) + Tailwind
+configs/   YAML de configuración (pydantic-settings)
+docs/      consigna y documentación
+report/    bitácora pedagógica + (Fase 4) informe
+```

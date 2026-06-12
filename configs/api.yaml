@@ -1,0 +1,9 @@
+# Configuración del servicio FastAPI.
+# La consume backend/src/config.py vía pydantic-settings.
+# Las variables de entorno con prefijo API_ PISAN estos valores
+# (en contenedores la fuente canónica es el entorno; este YAML es para dev local).
+service_name: soccernet-events-api
+host: 0.0.0.0
+port: 8000
+log_level: info
+cors_origins: [] # vacío a propósito: usamos el reverse-proxy de nginx, no CORS
