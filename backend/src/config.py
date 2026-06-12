@@ -33,12 +33,21 @@ class Settings(BaseSettings):
     port: int = 8000
     log_level: str = "info"
     cors_origins: list[str] = []
+    # Directory holding the exported model bundle (model.joblib). Relative paths resolve
+    # against the monorepo root locally; in Docker set API_MODEL_DIR to the mounted path.
+    model_dir: str = "models/v0"
+
+    def resolved_model_dir(self) -> Path:
+        path = Path(self.model_dir)
+        return path if path.is_absolute() else _REPO_ROOT / path
 
     model_config = SettingsConfigDict(
         env_prefix="API_",
         env_file=".env",
         env_file_encoding="utf-8",
         extra="ignore",
+        # ``model_dir`` uses the ``model_`` prefix pydantic reserves; opt out of the guard.
+        protected_namespaces=(),
     )
 
     @classmethod
