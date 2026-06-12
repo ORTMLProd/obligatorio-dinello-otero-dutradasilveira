@@ -86,3 +86,90 @@ responsable de su corrección.
 El `.gitignore` ignora imágenes (`*.png`, `*.jpg`, …) por la política NDA. Cuando el
 frontend necesite assets propios en Fase 3, acotar los patrones (p. ej. `/data/**/*.png`)
 o agregar excepciones (`!frontend/src/assets/**`).
+
+---
+
+## 2026-06-12 — Fase 1: Datos + EDA (camino liviano)
+
+### Qué se hizo
+Pipeline de datos config-driven que construye un dataset de **ventanas** etiquetadas y
+su EDA, sin descargar videos:
+
+- **Descarga** (`src/data/download.py`): baja `Labels-v2.json` + features ResNet
+  pre-extraídas (`*_ResNET_TF2_PCA512.npy`, 512-dim, 2 fps, una array por mitad) de 8
+  partidos. **Sin password NDA** (los videos no se tocan). Idempotente.
+- **Splits** (`src/data/splits.py`): asigna `game_id → {train,val,test}` (5/2/1)
+  determinísticamente y los versiona en `configs/splits.yaml`.
+- **Features compartidas** (`src/features/tabular.py`, `visual.py`): features tabulares
+  **point-in-time** y pooling de la ventana ±2s sobre las features ResNet. Única fuente
+  de preprocesamiento (la importará la API en Fase 2).
+- **Constructor** (`src/data/build_dataset.py`): genera ventanas de evento (4 clases) +
+  background (sampleado a ratio 2:1, ≥30s de toda anotación) → `manifest.parquet` (615
+  ventanas) + `resnet_pooled.npy` (615×512, alineado por fila) + `report/dataset_summary.json`
+  (conteos + hash de contenido).
+- **EDA** (`notebooks/eda.ipynb`): consume **solo** desde `src/`; reporta distribución de
+  clases, desbalance (17.8x; background 66.7%), eventos por minuto/mitad, cobertura por
+  split y sanity de las features.
+- **Tests** (todos en verde, 23): regresión de **leakage** (`test_leakage.py`),
+  **point-in-time** (`test_pointintime.py`), unidad de features y de sampling de background.
+
+**DoD alcanzado:** manifest parquet + splits versionados + notebook de EDA con hallazgos.
+
+### Por qué se hizo así
+- **Camino liviano = end-to-end primero.** Construir el manifest desde features
+  pre-extraídas (no frames) evita GB de video y la password NDA, y ya da un dataset
+  entrenable para el baseline v0 (Fase 2: LogReg/XGBoost sobre ResNet pooled ⊕ tabular).
+  La extracción de frames se difiere a Fase 3, cuando la CNN v1 los necesite.
+- **Splits por `game_id`, no por ventana.** Si dos ventanas del mismo partido cayeran en
+  train y test, el modelo "vería" el partido de test al entrenar → leakage. La asignación
+  se versiona en git (contrato chico y auditable), no en el parquet regenerable.
+- **Point-in-time en lo tabular.** `score_diff`, `events_so_far`, etc. usan solo
+  anotaciones **estrictamente anteriores** a `t` (un evento exactamente en `t` no cuenta
+  todavía). Si usáramos el score final, el modelo tendría información del futuro.
+- **No se fitea nada en Fase 1.** El manifest guarda features crudas; el scaler/encoder se
+  fitea en Fase 2 **solo sobre train** para no filtrar estadísticas de val/test.
+- **Background submuestreado (2:1), no natural.** El background real es muchísimo mayor;
+  fijar el ratio por config evita un dataset 99% background y deja el desbalance manejable.
+
+### Concepto del curso relacionado
+- Preparación de datos y EDA (criterio de evaluación explícito de la consigna).
+- **Data leakage** (desafío del curso): splits por grupo + corrección point-in-time.
+- **Training-serving skew**: `src/features/` como única verdad, importable por la API.
+- Reproducibilidad: todo seedeado y config-driven; hash de contenido del dataset.
+- Desbalance de clases: se mide y se explicita (invariante 5); guía las métricas de Fase 2.
+
+### Requerimiento de la consigna que cubre
+- Mínimo **"Dataset propio + EDA"** (dataset de ventanas imágenes-derivadas ⊕ tabular).
+- Mínimo **"Clasificación con target definido por los estudiantes"** (multiclase: goal,
+  card, substitution, corner, background).
+- Avanza los desafíos mínimos **data leakage** y **training-serving skew**.
+- Encamina el electivo **Trazabilidad de ML** (manifest hasheado + splits versionados).
+
+### Alternativas consideradas y descartadas
+- **Descargar videos + extraer frames ahora** → diferido a Fase 3: pesado, requiere
+  password NDA y no aporta al baseline v0.
+- **Guardar el vector ResNet inline en el parquet** (columna lista de 512 floats) →
+  descartado: `npy` separado alineado por fila es más liviano de leer y mantiene el
+  manifest legible.
+- **Comitear el `manifest.parquet`/`.npy`** → descartado por política NDA/tamaño; se
+  versiona la config + splits + summary (hash), que permiten regenerarlo.
+- **Split aleatorio por fila** → descartado: viola la invariante 1 (leakage).
+- **Score relativo al equipo anotado** → se usó `home − away` (bien definido y
+  point-in-time); el relativo se puede revisar si aporta en Fase 2.
+
+### Limitaciones asumidas
+- 8 partidos de **una sola liga** (`england_epl`): la dimensión "eventos por liga" del EDA
+  queda trivial y val/test tienen pocas muestras por clase minoritaria. Escalable subiendo
+  `num_games` en `configs/dataset.yaml` (y, a futuro, diversificando ligas).
+
+### Referencias al código
+- Datos: `backend/src/data/{config,download,splits,build_dataset,windows,labels,dataset}.py`.
+- Features: `backend/src/features/{tabular,visual}.py`.
+- Config/artefactos: `configs/dataset.yaml`, `configs/splits.yaml`, `report/dataset_summary.json`.
+- EDA: `backend/notebooks/eda.ipynb`.
+- Tests: `backend/tests/test_{leakage,pointintime,features_tabular,features_visual,background_sampling}.py`.
+
+### Uso de IA generativa
+Fase desarrollada con asistencia de Claude Code (planificación del alcance, generación de
+código, del notebook y de esta bitácora). Todo el contenido fue revisado por el estudiante,
+responsable de su corrección.

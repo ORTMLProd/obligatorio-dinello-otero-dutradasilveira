@@ -1,0 +1,58 @@
+# ─────────────────────────────────────────────────────────────────────────────
+# Especificación del dataset de ventanas SoccerNet (Fase 1 — camino liviano).
+#
+# Esta config es la ÚNICA fuente de verdad para regenerar el dataset: la consumen
+# src/data/download.py, src/data/splits.py y src/data/build_dataset.py.
+# No hay números mágicos en el código (convención del proyecto).
+#
+# Camino liviano: el manifest se arma con Labels-v2.json + features ResNet
+# pre-extraídas (sin videos, sin password NDA). Los frames llegan en Fase 3.
+# ─────────────────────────────────────────────────────────────────────────────
+
+seed: 42
+
+# Subconjunto chico para cerrar el ciclo end-to-end. Escalar a 30-50 cambiando
+# solo `num_games`. `source_split` indica de qué split de SoccerNet tomamos la
+# lista de partidos; NO es nuestro split (re-particionamos por game_id, ver abajo).
+num_games: 8
+source_split: train
+game_ids: [] # si se completa, pisa num_games (lista explícita de partidos)
+
+# Mapeo de las 17 clases de SoccerNet → nuestras 4 clases objetivo de evento.
+# Todo lo que no matchee y esté suficientemente lejos de un evento → background.
+target_labels:
+  goal: ["Goal"]
+  card: ["Yellow card", "Red card", "Yellow->red card"]
+  substitution: ["Substitution"]
+  corner: ["Corner"]
+
+# Ventana ±2s alrededor del timestamp anotado (invariante de la spec del dataset).
+window:
+  half_window_ms: 2000
+
+# Background: se muestrea de timestamps a ≥ min_gap_s de CUALQUIER anotación, y se
+# submuestrea a ratio background:evento (NO se conserva el ratio natural).
+background:
+  ratio: 2
+  min_gap_s: 30
+
+# Features ResNet pre-extraídas: una array por mitad (1_ = primer tiempo,
+# 2_ = segundo), 512-dim (PCA), 2 fps. Pooling de la ventana → un vector por ventana.
+features:
+  files: ["1_ResNET_TF2_PCA512.npy", "2_ResNET_TF2_PCA512.npy"]
+  fps: 2
+  dim: 512
+  pool: mean
+
+# Particionado SIEMPRE por game_id (invariante 1, anti data-leakage).
+split:
+  train: 0.6
+  val: 0.2
+  test: 0.2
+
+# Rutas relativas a la raíz del repo. data/ y models/ están gitignored.
+paths:
+  raw_dir: "data/raw/soccernet"
+  processed_dir: "data/processed"
+  splits_file: "configs/splits.yaml"
+  summary_file: "report/dataset_summary.json"
