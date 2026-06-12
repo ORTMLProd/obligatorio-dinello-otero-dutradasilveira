@@ -8,19 +8,32 @@ training-serving skew.
 
 from __future__ import annotations
 
+import logging
 from collections.abc import AsyncIterator
 from contextlib import asynccontextmanager
 
 from fastapi import FastAPI
 
 from src import __version__
-from src.api.routers import health, model_info
+from src.api.routers import health, model_info, predict
 from src.config import get_settings
+from src.models.export import load_bundle
+
+logger = logging.getLogger(__name__)
 
 
 @asynccontextmanager
 async def lifespan(app: FastAPI) -> AsyncIterator[None]:
-    # Fase 2: load model + fitted transformers here and store them on ``app.state``.
+    # Load the model bundle (estimator + fitted preprocessor) once at startup and keep it
+    # on app.state. The preprocessor is never re-fitted here (invariant 3). If no bundle is
+    # present (fresh deploy before training), the API still boots and /predict returns 503.
+    model_dir = get_settings().resolved_model_dir()
+    try:
+        app.state.bundle = load_bundle(model_dir)
+        logger.info("loaded model bundle from %s (%s)", model_dir, app.state.bundle.model_version)
+    except (FileNotFoundError, OSError):
+        app.state.bundle = None
+        logger.warning("no model bundle at %s — /predict will return 503", model_dir)
     yield
 
 
@@ -35,6 +48,7 @@ def create_app() -> FastAPI:
     )
     app.include_router(health.router)
     app.include_router(model_info.router)
+    app.include_router(predict.router)
 
     @app.get("/", tags=["root"])
     async def root() -> dict[str, str]:
