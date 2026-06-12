@@ -40,6 +40,9 @@ dist/
 # ── Claude Code (local, por máquina) ────────────────────────────────────────
 .claude/settings.local.json
 
+# ── Playwright MCP (capturas/snapshots de verificación) ─────────────────────
+.playwright-mcp/
+
 # ── OS / editores ───────────────────────────────────────────────────────────
 .DS_Store
 .idea/

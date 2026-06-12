@@ -29,8 +29,8 @@ MEDIA=$(printf '%s\n' "$STAGED" | grep -Ei '\.(mkv|mp4|avi|mov|webm)$' || true)
 FRAMES=$(printf '%s\n' "$STAGED" | grep -Ei '^data/.*\.(jpg|jpeg|png|bmp|npy|npz)$' || true)
 [ -n "$FRAMES" ] && VIOLATIONS="${VIOLATIONS}Frames/features bajo data/ (NDA):\n${FRAMES}\n"
 
-# 3) Archivos de entorno / secretos
-ENVS=$(printf '%s\n' "$STAGED" | grep -E '(^|/)\.env(\.|$)?' || true)
+# 3) Archivos de entorno / secretos (permite el template versionado .env.example)
+ENVS=$(printf '%s\n' "$STAGED" | { grep -E '(^|/)\.env($|\.)' || true; } | { grep -Ev '(^|/)\.env\.example$' || true; })
 [ -n "$ENVS" ] && VIOLATIONS="${VIOLATIONS}Archivos .env:\n${ENVS}\n"
 
 # 4) Contenido staged que mencione la password de SoccerNet

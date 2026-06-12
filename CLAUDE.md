@@ -205,13 +205,18 @@ docker compose up --build
 ## Convenciones
 
 - Python 3.12, type hints en todo, `ruff` para lint+formato.
-- Código, identificadores, docstrings y mensajes de commit: **inglés**.
-  Explicaciones al usuario, bitácora, informe y textos del frontend: **español
+- Código, identificadores y docstrings: **inglés**. Mensajes de commit y PRs,
+  explicaciones al usuario, bitácora, informe y textos del frontend: **español
   rioplatense**.
 - Config antes que constantes: todo lo tuneable vive en `configs/*.yaml`,
   cargado con pydantic-settings. Sin números mágicos en el código.
 - Commits chicos y revisables por tarea; conventional commits (`feat:`, `fix:`,
-  `data:`, `exp:`).
+  `data:`, `exp:`). Flujo de ramas: `main` + feature branches, avances chicos.
+  **El asistente (Claude) NUNCA mergea**: abre PRs y el merge lo hace el equipo.
+  Commits y PRs sin firma de Claude (`includeCoAuthoredBy: false`).
+- **Diseño de UI (Fase 3):** antes de implementar en React, producir mockups HTML
+  estáticos revisables durante el planeamiento, para validar la dirección visual
+  con el usuario.
 - Los notebooks nunca contienen lógica de la que dependa código productivo —
   importan desde `src/`.
 - Tests obligatorios para: constructores de features (incluyendo un test de
