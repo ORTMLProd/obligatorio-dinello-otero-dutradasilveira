@@ -13,9 +13,10 @@ import pandas as pd
 from optuna.trial import FixedTrial
 
 from src.features.tabular import TABULAR_COLUMNS
-from src.models.config import SearchParamSpec, TuningConfig
+from src.models.config import ModelSpec, SearchParamSpec, TuningConfig
+from src.models.export import predict_frame
 from src.models.train import SplitData
-from src.models.tune import objective, sample_params, sample_selected_columns
+from src.models.tune import _fit_bundle, objective, sample_params, sample_selected_columns
 
 CLASSES = ["background", "card", "corner", "goal", "substitution"]
 EMB_DIM = 8
@@ -84,6 +85,42 @@ def test_objective_returns_valid_f1() -> None:
     )
     score = objective(trial, splits, CLASSES, cfg, scale_numeric=False, use_embedding=True, seed=42)
     assert 0.0 <= score <= 1.0
+
+
+def test_tuned_bundle_serves_with_full_request_contract() -> None:
+    """Regression: a feature-selected bundle must still serve through the router path.
+
+    The API builds the request frame from ``bundle.tabular_columns``. If feature selection
+    shrank that list, ``assemble_matrix`` (which needs every TABULAR_COLUMNS) would KeyError
+    at serving. ``tabular_columns`` must stay the full request contract; the dropped columns
+    live only inside the fitted preprocessor.
+    """
+    train = _synthetic_split(20, seed=1)
+    test = _synthetic_split(5, seed=2)
+    splits = {"train": train, "test": test}
+    selected = ("league", "half", "visible")  # a strict subset of the 8 tabular columns
+
+    bundle = _fit_bundle(
+        ModelSpec(type="xgboost", params={"max_depth": 3, "n_estimators": 30}),
+        selected,
+        splits,
+        CLASSES,
+        scale_numeric=False,
+        use_embedding=True,
+        seed=42,
+        embedding_dim=EMB_DIM,
+        version="v1-test",
+        dataset_hash="deadbeef",
+        config_hash="cafe",
+    )
+
+    # The request contract is the full column set, regardless of what the model uses.
+    assert tuple(bundle.tabular_columns) == TABULAR_COLUMNS
+
+    # Mimic the router: build the frame from bundle.tabular_columns, then serve.
+    frame = test.tabular[list(bundle.tabular_columns)]
+    labels, proba = predict_frame(bundle, frame, test.embedding)
+    assert all(lbl in CLASSES for lbl in labels)
 
 
 def test_objective_never_reads_test_split() -> None:
