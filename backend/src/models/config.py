@@ -10,6 +10,7 @@ from __future__ import annotations
 import os
 import re
 from pathlib import Path
+from typing import Literal
 
 import yaml
 from pydantic import BaseModel, ConfigDict, Field
@@ -48,6 +49,39 @@ class MLflowConfig(BaseModel):
     register_model: bool = True
 
 
+class SearchParamSpec(BaseModel):
+    """One hyperparameter's Optuna search range, declared in ``train.yaml``.
+
+    ``int``/``float`` map to ``suggest_int``/``suggest_float``. ``log`` samples on a log
+    scale (useful for ``learning_rate``); ``step`` discretises a non-log range.
+    """
+
+    model_config = ConfigDict(extra="forbid")
+    type: Literal["int", "float"]
+    low: float
+    high: float
+    step: float | None = None
+    log: bool = False
+
+
+class TuningConfig(BaseModel):
+    """Optuna tuning + tabular feature selection (Phase 3 optimisation electivo).
+
+    Disabled by default so the v0 ``train.yaml`` keeps validating unchanged. The search
+    maximises *validation* macro-F1 only — the test split is never read during search
+    (anti data-leakage). ``always_keep`` columns are never dropped by feature selection.
+    """
+
+    model_config = ConfigDict(extra="forbid")
+    enabled: bool = False
+    n_trials: int = Field(default=30, ge=1)
+    timeout_s: int | None = None
+    target_model: str = "xgboost"
+    select_features: bool = True
+    always_keep: list[str] = Field(default_factory=lambda: ["league"])
+    search_space: dict[str, SearchParamSpec] = Field(default_factory=dict)
+
+
 class TrainPathsConfig(BaseModel):
     model_config = ConfigDict(extra="forbid")
     model_dir: str
@@ -68,6 +102,7 @@ class TrainConfig(BaseModel):
     features: TrainFeaturesConfig
     mlflow: MLflowConfig
     paths: TrainPathsConfig
+    tuning: TuningConfig = Field(default_factory=TuningConfig)
 
     @classmethod
     def from_yaml(cls, path: Path | str) -> TrainConfig:

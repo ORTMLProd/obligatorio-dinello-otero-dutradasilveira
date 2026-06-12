@@ -34,32 +34,45 @@ assert set(CATEGORICAL_COLUMNS) | set(NUMERIC_COLUMNS) | set(PASSTHROUGH_COLUMNS
 ), "preprocess column partition must cover exactly TABULAR_COLUMNS"
 
 
-def build_preprocessor(scale_numeric: bool = True) -> ColumnTransformer:
+def build_preprocessor(
+    scale_numeric: bool = True,
+    selected_columns: tuple[str, ...] | None = None,
+) -> ColumnTransformer:
     """Build the (unfitted) tabular preprocessor.
 
     Args:
         scale_numeric: standard-scale the continuous numerics. Helps linear models
             (LogReg); tree models (XGBoost) are scale-invariant and ignore it.
+        selected_columns: subset of ``TABULAR_COLUMNS`` to keep, for tabular feature
+            selection (Phase 3 optimisation). ``None`` keeps all (the v0 behaviour).
+            Whatever is selected is still routed through the same cat/num/passthrough
+            partition, so this stays the single preprocessing source (invariant 3).
 
     Returns:
-        A ColumnTransformer expecting a DataFrame with ``TABULAR_COLUMNS``. ``league`` is
-        one-hot encoded with ``handle_unknown="ignore"`` so an unseen league at serving
-        yields an all-zero block instead of crashing.
+        A ColumnTransformer expecting a DataFrame with ``TABULAR_COLUMNS`` (unselected
+        columns are dropped by ``remainder="drop"``). ``league`` is one-hot encoded with
+        ``handle_unknown="ignore"`` so an unseen league at serving yields an all-zero
+        block instead of crashing.
     """
+    selected = set(TABULAR_COLUMNS if selected_columns is None else selected_columns)
+    unknown = selected - set(TABULAR_COLUMNS)
+    if unknown:
+        raise ValueError(f"selected_columns outside TABULAR_COLUMNS: {sorted(unknown)}")
+
     numeric_step = StandardScaler() if scale_numeric else "passthrough"
-    return ColumnTransformer(
-        transformers=[
-            (
-                "cat",
-                OneHotEncoder(handle_unknown="ignore", sparse_output=False),
-                list(CATEGORICAL_COLUMNS),
-            ),
-            ("num", numeric_step, list(NUMERIC_COLUMNS)),
-            ("pass", "passthrough", list(PASSTHROUGH_COLUMNS)),
-        ],
-        remainder="drop",
-        sparse_threshold=0.0,
-    )
+    # Intersect each block with the selection, preserving the declared order, and drop
+    # empty blocks so the ColumnTransformer never receives a transformer with no columns.
+    blocks = [
+        ("cat", OneHotEncoder(handle_unknown="ignore", sparse_output=False), CATEGORICAL_COLUMNS),
+        ("num", numeric_step, NUMERIC_COLUMNS),
+        ("pass", "passthrough", PASSTHROUGH_COLUMNS),
+    ]
+    transformers = [
+        (name, step, cols)
+        for name, step, columns in blocks
+        if (cols := [c for c in columns if c in selected])
+    ]
+    return ColumnTransformer(transformers=transformers, remainder="drop", sparse_threshold=0.0)
 
 
 def assemble_matrix(
