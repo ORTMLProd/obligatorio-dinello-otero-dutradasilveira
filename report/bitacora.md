@@ -173,3 +173,115 @@ su EDA, sin descargar videos:
 Fase desarrollada con asistencia de Claude Code (planificación del alcance, generación de
 código, del notebook y de esta bitácora). Todo el contenido fue revisado por el estudiante,
 responsable de su corrección.
+
+---
+
+## 2026-06-12 — Fase 2: Baseline end-to-end (modelo v0 + MLflow + API + Docker)
+
+### Qué se hizo
+El ciclo completo de ML, de los datos de Fase 1 a predicciones servidas en Docker. Se
+estructuró en PRs chicos y apilados (cada rama sale de la anterior):
+
+- **Preprocesador compartido** (`src/features/preprocess.py`): `build_preprocessor`
+  (ColumnTransformer: OneHot para `league`, StandardScaler en numéricas, passthrough en
+  binarias) y `assemble_matrix`, el **único punto** donde se arma la matriz
+  `[tabular ⊕ embedding]`, usado idéntico por training y API.
+- **Entrenamiento** (`src/models/train.py`): late fusion `[tabular point-in-time ⊕ ResNet
+  pooled]`. Splitea por la columna `split` del manifest, fitea el preprocesador **solo en
+  train**, entrena **LogReg y XGBoost**, selecciona el mejor por **macro-F1 de validación**
+  (el test se reporta una vez, sin seleccionar sobre él), loguea a MLflow y registra el
+  mejor en el Model Registry. Seedeado.
+- **Evaluación** (`src/models/evaluate.py`): precision/recall/F1 por clase, macro-F1,
+  PR-AUC one-vs-rest y matriz de confusión. Nunca accuracy a secas.
+- **Export/inferencia** (`src/models/export.py`): bundle joblib (modelo + preprocesador
+  fiteado + clases + `embedding_dim` + hashes de dataset/config + métricas) y
+  `predict_frame`, el path de inferencia que comparte la API.
+- **API** (`src/api/`): `POST /predict` y `POST /predict/batch` con schemas pydantic
+  estrictos (`extra="forbid"`); el `lifespan` carga el bundle en `app.state` (nunca
+  re-fitea); `/model-info` reporta el modelo real.
+- **Docker** (`docker-compose.yml`, `mlflow/Dockerfile`): servicio MLflow (UI + Registry
+  sobre sqlite, artefactos proxeados) en el puerto 5500; la API monta `./models` y carga
+  el bundle.
+- **Tests** (33 en verde): anti-skew del preprocesador, smoke de train (fit→export→reload→
+  predict) y contrato de los endpoints (probas suman 1, `extra="forbid"`→422, embedding de
+  largo inválido→422, 503 sin modelo).
+
+**Resultado v0** (8 partidos, dataset chico): XGBoost gana con **val macro-F1 = 0.885 /
+test = 0.800**, sobre LogReg (0.744 / 0.518). **DoD alcanzado:** clone fresco → `train` →
+`docker compose up` sirve predicciones, con runs y modelo registrados en MLflow.
+
+### Por qué se hizo así
+- **Contrato visual = embedding precomputado (no imagen cruda) en v0.** El modelo se entrena
+  con las features ResNet+PCA de SoccerNet, un extractor (TF2+PCA512) que no poseemos y no
+  podemos reproducir desde pixeles en serving. Para evitar **training-serving skew**, la API
+  consume el mismo embedding. La imagen cruda real llega en v1 (CNN propia → extractor
+  idéntico en train y serving). Es la decisión más importante de la fase y queda explícita
+  para el informe.
+- **Preprocesador fiteado solo en train y serializado con el modelo.** Si fiteáramos el
+  scaler/encoder sobre todo el dataset, filtraríamos estadísticas de val/test (leakage); si
+  lo re-fiteáramos en la API, divergiría del de training (skew). Se fitea una vez, viaja en
+  el bundle y la API lo carga.
+- **Dos modelos comparados, selección en validación.** LogReg como piso interpretable y
+  XGBoost como v0 real (maneja desbalance y no-linealidades del fusion). Elegir por val (no
+  test) evita sesgar la estimación de generalización. Correr ambos es barato y da la
+  discusión de alternativas que pide la consigna.
+- **Desbalance manejado explícitamente.** `class_weight='balanced'` (LogReg) y
+  `sample_weight` balanceado (XGBoost); métricas por clase + PR-AUC, nunca accuracy.
+- **MLflow desacoplado del serving.** La API carga el bundle exportado de `models/v0`, no
+  depende de MLflow en runtime: el tracking sirve trazabilidad, no es parte del path crítico.
+- **El bundle no se comitea** (gitignored); se regenera con `train`. Trazabilidad vía hashes
+  de dataset y config dentro del bundle, y vía MLflow.
+
+### Concepto del curso relacionado
+- **Training-serving skew** (desafío): única fuente de preprocesamiento + transformador
+  serializado + contrato visual coherente train/serving.
+- **Contrato de la API**: schemas pydantic estrictos, mismos tipos para online y batch.
+- **Trazabilidad / versionado de modelos**: MLflow (experimentos + Model Registry).
+- **Desbalance de clases** (invariante 5): pesos + métricas por clase + PR-AUC.
+- **Reproducibilidad / determinismo**: seed logueado, config completa registrada, hashes.
+- **Selección de modelo**: validación para elegir, test para reportar una sola vez.
+
+### Requerimiento de la consigna que cubre
+- Mínimo **"API online + batch + documentación"** (`/predict`, `/predict/batch`, Swagger).
+- Mínimo **"Ambiente: dependencias dev/prod + Docker"** (stack completo en compose).
+- Cierra los desafíos mínimos **data leakage** y **training-serving skew** en el path de
+  entrenamiento + serving.
+- Electivo 1 **Trazabilidad de ML** (MLflow: experimentos + registro de modelos).
+- **Esto satisface el mínimo del obligatorio** (Fase 2 del plan).
+
+### Alternativas consideradas y descartadas
+- **`/predict` con imagen cruda + extractor propio en v0** → descartado: para no tener skew
+  el extractor debe ser el mismo en train y serving, lo que obliga a extraer frames →
+  videos → password NDA (camino pesado). Se difiere a v1.
+- **Red profunda como baseline v0** → descartada: over-engineering para 615 ventanas y
+  contradice "end-to-end antes que rendimiento". El gradient boosting sobre el fusion es un
+  baseline honesto y fuerte.
+- **MLflow con file-store** → descartado: MLflow 3 lo deprecó y no soporta Model Registry.
+  Se usa sqlite (local) / servidor con sqlite (Docker).
+- **Escalar lo tabular junto al embedding** → no se hizo: el embedding PCA ya está en rango
+  razonable y XGBoost es invariante a escala; mantener `assemble_matrix` simple evita un
+  scaler extra que también habría que serializar.
+- **Batch asíncrono** → diferido: v0 es síncrono (suficiente para el volumen actual).
+- **Puerto 5000 para MLflow** → cambiado a 5500: en macOS lo toma AirPlay/Control Center.
+
+### Limitaciones asumidas
+- Dataset chico (8 partidos, una liga): las clases minoritarias (goal n=3, card n=4 en test)
+  dan métricas ruidosas. El macro-F1 de test (0.800) debe leerse con cautela; escalable
+  subiendo `num_games`.
+- La API debe reiniciarse si se entrena **después** de levantar el stack (el bundle se carga
+  en el `lifespan`). Documentado en el README.
+
+### Referencias al código
+- Features: `backend/src/features/preprocess.py`.
+- Modelos: `backend/src/models/{config,train,evaluate,export}.py`.
+- API: `backend/src/api/{main.py,schemas.py,routers/predict.py,routers/model_info.py}`,
+  `backend/src/config.py`.
+- Config: `configs/train.yaml`. Métricas: `report/metrics/metrics_v0.json`.
+- Docker: `docker-compose.yml`, `mlflow/Dockerfile`.
+- Tests: `backend/tests/test_{preprocess,train_smoke,predict}.py`.
+
+### Uso de IA generativa
+Fase desarrollada con asistencia de Claude Code (planificación del alcance y de las
+decisiones de diseño, generación de código y tests, y redacción de esta bitácora). Todo el
+contenido fue revisado por el estudiante, responsable de su corrección y de poder defender
+cada decisión.
