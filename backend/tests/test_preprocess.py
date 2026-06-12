@@ -72,3 +72,40 @@ def test_embedding_row_count_mismatch_raises() -> None:
     except ValueError:
         return
     raise AssertionError("expected ValueError on row-count mismatch")
+
+
+def test_selected_columns_none_equals_all() -> None:
+    """The default (None) selects every tabular column — same width as listing them all."""
+    train = _frame([_row(), _row(league="spain_laliga")])
+    full = build_preprocessor(selected_columns=None).fit(train[list(TABULAR_COLUMNS)])
+    explicit = build_preprocessor(selected_columns=TABULAR_COLUMNS).fit(
+        train[list(TABULAR_COLUMNS)]
+    )
+
+    width_full = assemble_matrix(train, embedding=None, preprocessor=full).shape[1]
+    width_explicit = assemble_matrix(train, embedding=None, preprocessor=explicit).shape[1]
+    assert width_full == width_explicit
+
+
+def test_selected_columns_subset_drops_those_columns() -> None:
+    """Dropping one numeric and one passthrough feature shrinks the matrix by exactly two."""
+    train = _frame([_row(), _row(league="spain_laliga")])
+    full = build_preprocessor(scale_numeric=False).fit(train[list(TABULAR_COLUMNS)])
+
+    subset = tuple(c for c in TABULAR_COLUMNS if c not in ("score_diff", "visible"))
+    reduced_pre = build_preprocessor(scale_numeric=False, selected_columns=subset).fit(
+        train[list(TABULAR_COLUMNS)]
+    )
+
+    width_full = assemble_matrix(train, embedding=None, preprocessor=full).shape[1]
+    width_reduced = assemble_matrix(train, embedding=None, preprocessor=reduced_pre).shape[1]
+    assert width_reduced == width_full - 2
+
+
+def test_selected_columns_rejects_unknown() -> None:
+    """A column outside TABULAR_COLUMNS is a config error, caught early."""
+    try:
+        build_preprocessor(selected_columns=("half", "not_a_real_feature"))
+    except ValueError:
+        return
+    raise AssertionError("expected ValueError on unknown selected column")

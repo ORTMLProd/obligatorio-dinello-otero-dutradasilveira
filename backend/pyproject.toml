@@ -33,10 +33,12 @@ dev = [
 data = [
     "SoccerNet>=0.1.60",
 ]
-# Experiment tracking. Only needed at training time (logging runs + model registry),
-# never at serving: the API loads the exported bundle directly. Kept out of the API image.
+# Experiment tracking + hyperparameter optimisation. Only needed at training time
+# (logging runs + model registry, Optuna search), never at serving: the API loads the
+# exported bundle directly. Kept out of the API image.
 ml = [
     "mlflow>=2.16",
+    "optuna>=4.0",
 ]
 
 # This is an application, not an installable library: uv installs the dependencies

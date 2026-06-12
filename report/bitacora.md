@@ -285,3 +285,88 @@ Fase desarrollada con asistencia de Claude Code (planificación del alcance y de
 decisiones de diseño, generación de código y tests, y redacción de esta bitácora). Todo el
 contenido fue revisado por el estudiante, responsable de su corrección y de poder defender
 cada decisión.
+
+---
+
+## 2026-06-12 — Fase 3.1: Optimización de modelos (Optuna + feature selection)
+
+### Qué se hizo
+- Se implementó el electivo de **optimización de modelos** con **dos sub-técnicas**, ambas
+  con impacto medido en métricas de ML **y** latencia:
+  1. **Tuning de hiperparámetros con Optuna** (`backend/src/models/tune.py`): búsqueda TPE
+     sobre el XGBoost, search space declarado en `configs/train.yaml` (sin números mágicos).
+  2. **Feature selection tabular**: cada trial de Optuna también elige un subconjunto de
+     `TABULAR_COLUMNS` (las `always_keep` nunca se descartan).
+- Se hizo `build_preprocessor` **selection-aware** (parámetro `selected_columns`): filtra la
+  partición cat/num/passthrough por intersección, sin dejar de ser la única fuente de
+  preprocesamiento (invariante 3). Default `None` = comportamiento v0 intacto.
+- `tune.py` **reutiliza** el pipeline de `train.py` (`split_dataset`, `fit_one`,
+  `evaluate_on`, `_flatten_metrics`), sin duplicar lógica.
+- Resultado de la corrida en vivo (40 trials, dataset v0), logueado en MLflow
+  (experimento `optimization-v1`, modelo registrado `soccernet-events-v1`):
+
+  | | macro-F1 (test) | p50 | p95 | features |
+  |---|---|---|---|---|
+  | baseline (params default, 8 feats) | 0.800 | 1.15 ms | 1.29 ms | 8 |
+  | **tuned** (Optuna + selection) | **0.858** | 1.13 ms | 1.25 ms | 5 |
+  | Δ | **+0.058** | −0.02 ms | −0.04 ms | −3 |
+
+  El tuning **mejoró F1 y bajó latencia** a la vez, descartando 3 features tabulares débiles
+  (`minute`, `score_diff`, `events_so_far`). El bundle tuneado se exporta a `models/v0` igual
+  que el baseline; la API lo sirve sin cambios (el schema sigue aceptando las 8 columnas y el
+  preprocesador descarta las 3 no usadas).
+- Tests nuevos (TDD): selección de columnas del preprocesador (`test_preprocess.py`) y núcleo
+  de tuning (`test_tune.py`), incluido un **test anti-leakage** que prueba que el `objective`
+  no lee el split de test. Suite total: 41 tests verdes.
+
+### Por qué se hizo así
+- **La búsqueda optimiza solo macro-F1 de validación; el test se mide una vez al final.**
+  Seleccionar hiperparámetros o features mirando test sería data leakage — el mismo principio
+  que los splits por `game_id` y las features point-in-time.
+- **Se mide impacto en ML _y_ latencia** porque la consigna lo exige explícitamente para el
+  electivo: no basta "tuneé y mejoró", hay que cuantificar el trade-off (acá no hubo trade-off
+  adverso: mejoró en ambas).
+- **Feature selection integrada en el mismo estudio Optuna**: busca conjuntamente
+  hiperparámetros + subconjunto de features, en vez de dos pasos separados; es más fiel a cómo
+  interactúan y produce un único óptimo comparable.
+- **Optuna y MLflow viven solo en el grupo `ml`** (no en la imagen de la API): el serving
+  carga el bundle exportado y no depende de ninguno en runtime.
+
+### Concepto del curso relacionado
+- **Optimización de modelos** (electivo): tuning de hiperparámetros + selección de features.
+- **Data leakage** (desafío): la función objetivo nunca toca test; selección sobre validación.
+- **Trade-off rendimiento/latencia**: medición de p50/p95 de inferencia online.
+- **Reproducibilidad**: sampler TPE seedeado, search space versionado en config.
+
+### Requerimiento de la consigna que cubre
+- Electivo **"Optimización de modelos (≥2 sub-técnicas, midiendo impacto)"**: cubierto con
+  tuning (Optuna) + feature selection, impacto medido en métricas y latencia.
+- Refuerza el electivo 1 **Trazabilidad** (nuevo experimento y modelo `v1` en MLflow).
+
+### Alternativas consideradas y descartadas
+- **Permutation importance como única feature selection (sin retrain)** → descartada: el
+  electivo pide _medir impacto_, y un ranking de importancia no es un delta medido de quitar
+  features. Se prefirió retrain con subconjunto para cuantificar el efecto real.
+- **Search space hardcodeado en el código** → descartado: contradice "config antes que
+  constantes". Vive en `train.yaml` con tipos validados (`SearchParamSpec`).
+- **Optimizar sobre test** → prohibido (leakage); se optimiza sobre validación.
+- **Grid search** → descartado frente a Optuna/TPE: más caro y peor cobertura del espacio
+  continuo (`learning_rate` log, `subsample`, etc.).
+
+### Limitaciones asumidas
+- Mismo dataset chico (8 partidos): el +0.058 de macro-F1 se mide sobre pocas decenas de
+  ejemplos en clases minoritarias → leer con cautela, igual que el baseline.
+- El export sobrescribe `models/v0` con el modelo v1 tuneado; es gitignored y regenerable con
+  `train`/`tune`. La versión real queda trazada en el bundle (`v1-tuned-...`) y en MLflow.
+
+### Referencias al código
+- Tuning: `backend/src/models/tune.py`. Config: `backend/src/models/config.py`
+  (`SearchParamSpec`, `TuningConfig`), `configs/train.yaml` (sección `tuning`).
+- Preprocesador selection-aware: `backend/src/features/preprocess.py`.
+- Tests: `backend/tests/test_tune.py`, `backend/tests/test_preprocess.py`.
+- Comando: `uv run python -m src.models.tune --config ../configs/train.yaml`.
+
+### Uso de IA generativa
+Bloque desarrollado con asistencia de Claude Code (diseño del enfoque, generación de código y
+tests con TDD, ejecución de la búsqueda y redacción de esta entrada). El estudiante revisó y
+validó cada decisión y es responsable de poder defenderla.
