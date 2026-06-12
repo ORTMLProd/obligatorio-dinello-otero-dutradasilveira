@@ -217,6 +217,8 @@ docker compose up --build
 - **Diseño de UI (Fase 3):** antes de implementar en React, producir mockups HTML
   estáticos revisables durante el planeamiento, para validar la dirección visual
   con el usuario.
+- Capturas/artefactos efímeros (screenshots de verificación, etc.) **nunca** van en
+  la raíz del repo: se guardan en `.playwright-mcp/` (gitignored) o se borran.
 - Los notebooks nunca contienen lógica de la que dependa código productivo —
   importan desde `src/`.
 - Tests obligatorios para: constructores de features (incluyendo un test de
