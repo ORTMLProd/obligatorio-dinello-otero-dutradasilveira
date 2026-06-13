@@ -91,3 +91,51 @@ def test_build_clips_no_game_crosses_splits(tmp_path) -> None:
     manifest = build(_config(tmp_path))
     by_game = manifest.groupby("game_id")["split"].nunique()
     assert (by_game == 1).all()
+
+
+def test_build_clips_raises_clearly_when_no_videos(tmp_path) -> None:
+    """Sin videos descargados no se extrae ningún clip → error claro, no KeyError."""
+    import pytest
+
+    raw = tmp_path / "raw"
+    game = "league_a/2020/match-1"
+    gdir = raw / game
+    gdir.mkdir(parents=True, exist_ok=True)
+    labels = {
+        "annotations": [
+            {
+                "gameTime": "1 - 00:02",
+                "position": "2000",
+                "label": "Goal",
+                "team": "home",
+                "visibility": "visible",
+            },
+        ]
+    }
+    (gdir / "Labels-v2.json").write_text(json.dumps(labels), encoding="utf-8")
+    # NB: no se crean los .mkv a propósito.
+    splits_file = tmp_path / "splits.yaml"
+    splits_file.write_text(yaml.safe_dump({game: "train"}), encoding="utf-8")
+
+    cfg = DatasetConfig.model_validate(
+        {
+            "seed": 42,
+            "num_games": 1,
+            "source_split": "train",
+            "game_ids": [game],
+            "target_labels": {"goal": ["Goal"]},
+            "window": {"half_window_ms": 2000},
+            "background": {"ratio": 1, "min_gap_s": 5},
+            "features": {"files": ["1_ResNET_TF2_PCA512.npy"], "fps": 2, "dim": 512},
+            "split": {"train": 0.6, "val": 0.2, "test": 0.2},
+            "paths": {
+                "raw_dir": str(raw),
+                "processed_dir": str(tmp_path / "processed"),
+                "splits_file": str(splits_file),
+                "summary_file": str(tmp_path / "summary.json"),
+            },
+            "clips": {"enabled": True, "k": 4, "clip_seconds": 2, "frame_size": 32},
+        }
+    )
+    with pytest.raises(SystemExit):
+        build(cfg)

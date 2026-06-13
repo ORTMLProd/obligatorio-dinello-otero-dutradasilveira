@@ -106,6 +106,11 @@ def build(cfg: DatasetConfig) -> pd.DataFrame:
             )
 
     manifest = pd.DataFrame(rows)
+    if manifest.empty:
+        raise SystemExit(
+            "No clips extracted — ¿descargaste los videos? "
+            "(clips.enabled=true + SOCCERNET_PASSWORD, luego src.data.download)."
+        )
     _write_artifacts(cfg, manifest, n_games=len(game_ids))
     return manifest
 
