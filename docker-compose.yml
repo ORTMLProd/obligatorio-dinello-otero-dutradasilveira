@@ -46,9 +46,36 @@ services:
     volumes:
       - mlflow-data:/mlflow
 
-# Fase 3 — se agregan cuando corresponda:
-#   prometheus: scrapea /metrics de la API
-#   grafana:    dashboards de monitoreo
+  # Monitoreo (Fase 3.4). Prometheus scrapea /metrics de la API; Grafana lo visualiza.
+  prometheus:
+    image: prom/prometheus:v3.1.0
+    ports:
+      - "9090:9090" # abrir http://localhost:9090
+    volumes:
+      - ./monitoring/prometheus/prometheus.yml:/etc/prometheus/prometheus.yml:ro
+      - prometheus-data:/prometheus
+    depends_on:
+      api:
+        condition: service_healthy
+
+  grafana:
+    image: grafana/grafana:11.4.0
+    ports:
+      - "3000:3000" # abrir http://localhost:3000 (admin/admin)
+    environment:
+      # Demo local: anónimo con rol Viewer para abrir el dashboard sin login.
+      GF_AUTH_ANONYMOUS_ENABLED: "true"
+      GF_AUTH_ANONYMOUS_ORG_ROLE: Viewer
+      GF_USERS_DEFAULT_THEME: dark
+    volumes:
+      # Datasource + provider provisionados, y el JSON del dashboard montado donde lo busca.
+      - ./monitoring/grafana/provisioning:/etc/grafana/provisioning:ro
+      - ./monitoring/grafana/dashboards:/var/lib/grafana/dashboards:ro
+      - grafana-data:/var/lib/grafana
+    depends_on:
+      - prometheus
 
 volumes:
   mlflow-data:
+  prometheus-data:
+  grafana-data:

@@ -189,3 +189,23 @@ def test_predict_503_when_no_model() -> None:
     client = TestClient(app)
     resp = client.post("/predict", json=_payload())
     assert resp.status_code == 503
+
+
+def test_metrics_endpoint_exposes_prometheus_format(client_with_model: TestClient) -> None:
+    resp = client_with_model.get("/metrics")
+    assert resp.status_code == 200
+    assert "text/plain" in resp.headers["content-type"]
+    assert "soccernet_predictions" in resp.text
+
+
+def test_predict_increments_class_counter(client_with_model: TestClient) -> None:
+    """A served prediction bumps soccernet_predictions_total for the predicted class."""
+    from prometheus_client import REGISTRY
+
+    resp = client_with_model.post("/predict", json=_payload())
+    label = resp.json()["predicted_label"]
+    count = REGISTRY.get_sample_value(
+        "soccernet_predictions_total",
+        {"predicted_label": label, "model_version": "v0-test"},
+    )
+    assert count is not None and count >= 1

@@ -578,3 +578,71 @@ visual y validó el resultado; es responsable de poder defenderlo.
 ### Uso de IA generativa
 Complemento desarrollado con Claude Code (TDD del helper de plots, integración y ejecución).
 Revisado por el estudiante.
+
+---
+
+## 2026-06-13 — Fase 3.4: Monitoreo (Prometheus + Grafana)
+
+### Qué se hizo
+- Observabilidad de la API con **Prometheus + Grafana** (puntos extra), instrumentada de forma
+  explícita (no auto-instrumentación) para que sea defendible.
+- **Endpoint `/metrics`** (`src/monitoring/metrics.py`) con métricas propias:
+  `soccernet_predictions_total{predicted_label,model_version}` (distribución en vivo),
+  `soccernet_prediction_latency_seconds` (histograma con buckets ms),
+  `soccernet_requests_total{endpoint,status}` (tráfico/errores) y
+  `soccernet_training_class_ratio{class_name}` (**baseline de drift**).
+- **Baseline de drift**: la distribución de clases del split de entrenamiento se guarda en el
+  bundle (`train_class_ratio`, nuevo campo) en train.py/tune.py, y la API la publica como gauge
+  al arrancar. El dashboard compara **vivo vs entrenamiento**.
+- **Logging de inferencias** (`src/monitoring/logging.py`): una línea JSON por predicción a
+  stdout (12-factor) con features tabulares + clase + probabilidades + versión + latencia,
+  **sin el embedding ni imágenes** (política de datos). El logger se configura explícitamente
+  a stdout en el arranque (un logger custom sin handler no emitiría).
+- **Stack en docker-compose**: servicios `prometheus` (scrapea `api:8000/metrics`) y `grafana`
+  con datasource + dashboard **provisionados por archivo** (`monitoring/`), así `docker compose
+  up` ya levanta el dashboard sin clicks (anónimo Viewer para la demo).
+- Verificado end-to-end: tráfico real → Prometheus target `up`, query OK, y Grafana mostrando
+  predicciones totales, requests/s, latencia p50/p95, distribución predicha (pie) y **drift**
+  (vivo ~53% corner / 47% background vs baseline 67% background / 16% corner — el sesgo lo
+  causan embeddings de prueba irreales, ilustra bien la detección).
+
+### Por qué se hizo así / concepto del curso
+- **Monitoreo / observabilidad en producción**: tráfico, latencia y, sobre todo, **qué predice
+  el modelo** — la base para detectar *data/concept drift*.
+- **Baseline de entrenamiento como referencia de drift**: comparar la distribución servida
+  contra la de entrenamiento es la forma operativa de ver si el input se aleja de lo visto.
+- **Instrumentación explícita** (Counter/Histogram/Gauge a mano): se ve y se defiende qué se
+  mide; preferida a una librería mágica.
+- **Política de datos**: el log nunca incluye el embedding ni imágenes; provisioning por
+  archivo = reproducibilidad (mismo dashboard en cualquier `docker compose up`).
+- **prometheus-client es dep de runtime** de la API (expone `/metrics`); Prometheus/Grafana son
+  servicios aparte, no tocan la imagen de la API.
+
+### Requerimiento de la consigna que cubre
+- **Técnica avanzada adicional / puntos extra**: monitoreo con Prometheus/Grafana + detección
+  de drift. Refuerza la trazabilidad y la operación del modelo servido.
+
+### Alternativas consideradas y descartadas
+- **`prometheus-fastapi-instrumentator` (auto-instrumentación)** → descartada: menos código pero
+  menos defendible y con métricas genéricas; se prefirió definir las métricas relevantes a mano.
+- **Drift con chequeo estadístico (divergencia/chi²)** → diferido: el panel vivo-vs-baseline ya
+  da la señal; un score estadístico es más pesado para puntos extra.
+- **Persistir logs a archivo** → descartado: stdout (12-factor), sin estado en el contenedor.
+- **Exponer el baseline desde el dataset en la API** → descartado: la API no carga el dataset;
+  el baseline viaja en el bundle (única fuente versionada con el modelo).
+
+### Limitaciones asumidas
+- El "drift" mostrado es ilustrativo (embeddings de prueba); con tráfico real reflejaría el
+  uso. Grafana usa login anónimo Viewer (demo local), no apto para producción real.
+
+### Referencias al código
+- Métricas/logging: `backend/src/monitoring/{metrics,logging}.py`. Endpoint:
+  `backend/src/api/routers/metrics.py`. Instrumentación: `backend/src/api/routers/predict.py`,
+  `backend/src/api/main.py`. Baseline: `train_class_ratio` en `export.py`/`train.py`/`tune.py`.
+- Stack: `docker-compose.yml`, `monitoring/prometheus/prometheus.yml`,
+  `monitoring/grafana/**`. Tests: `backend/tests/test_monitoring.py`, `test_predict.py`.
+
+### Uso de IA generativa
+Bloque desarrollado con asistencia de Claude Code (diseño, código y tests con TDD, configuración
+del stack y verificación end-to-end con Docker/Playwright, redacción de esta entrada). El
+estudiante revisó y validó cada decisión y es responsable de poder defenderla.
