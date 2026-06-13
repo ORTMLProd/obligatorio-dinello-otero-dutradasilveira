@@ -16,7 +16,13 @@ from src.features.tabular import TABULAR_COLUMNS
 from src.models.config import ModelSpec, SearchParamSpec, TuningConfig
 from src.models.export import predict_frame
 from src.models.train import SplitData
-from src.models.tune import _fit_bundle, objective, sample_params, sample_selected_columns
+from src.models.tune import (
+    _fit_bundle,
+    objective,
+    sample_params,
+    sample_selected_columns,
+    save_optuna_plots,
+)
 
 CLASSES = ["background", "card", "corner", "goal", "substitution"]
 EMB_DIM = 8
@@ -121,6 +127,19 @@ def test_tuned_bundle_serves_with_full_request_contract() -> None:
     frame = test.tabular[list(bundle.tabular_columns)]
     labels, proba = predict_frame(bundle, frame, test.embedding)
     assert all(lbl in CLASSES for lbl in labels)
+
+
+def test_save_optuna_plots_produces_files(tmp_path) -> None:
+    """The viz helper renders the study plots to disk (best-effort, returns written paths)."""
+    import optuna
+
+    optuna.logging.set_verbosity(optuna.logging.WARNING)
+    study = optuna.create_study(direction="maximize")
+    study.optimize(lambda t: t.suggest_float("x", 0.0, 1.0) + t.suggest_int("k", 1, 5), n_trials=8)
+
+    paths = save_optuna_plots(study, tmp_path)
+    assert len(paths) >= 1
+    assert all(p.exists() and p.stat().st_size > 0 for p in paths)
 
 
 def test_objective_never_reads_test_split() -> None:

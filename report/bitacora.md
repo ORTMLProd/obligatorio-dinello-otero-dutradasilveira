@@ -543,3 +543,38 @@ decisión y es responsable de poder defenderla.
 Bloque desarrollado con asistencia de Claude Code (mockups, diseño y código React, verificación
 end-to-end con Playwright/Docker, redacción de esta entrada). El estudiante revisó la dirección
 visual y validó el resultado; es responsable de poder defenderlo.
+
+---
+
+## 2026-06-13 — Fase 3.1 (complemento): visualizaciones de la optimización
+
+### Qué se hizo
+- Se agregaron a `src.models.tune` las visualizaciones que faltaban del electivo de
+  optimización, logueadas a MLflow (experimento `optimization-v1`):
+  - **Matriz de confusión** del modelo baseline y del tuneado sobre test (reusa
+    `evaluate.save_confusion_matrix_png`).
+  - **Plots de Optuna**: historial de optimización + importancia de hiperparámetros
+    (`save_optuna_plots`, vía `optuna.visualization.matplotlib` — sin sumar plotly/kaleido).
+- Las imágenes se generan en `report/metrics/` (gitignored por NDA) y se suben como
+  artefactos a MLflow; se ven en la UI de MLflow, no en git.
+
+### Hallazgo (insumo para el informe)
+- La importancia de hiperparámetros de Optuna muestra que **lo que más mueve el F1 de
+  validación es qué features se conservan** (`keep_secs_since_last_event` ≈ 0.62,
+  `keep_events_so_far` ≈ 0.13), por encima de los hiperparámetros del XGBoost (todos < 0.02).
+  Es decir: en este dataset la **feature selection pesó más que el tuning** — justifica haber
+  buscado ambas sub-técnicas en conjunto.
+- La matriz de confusión del tuneado tiene diagonal fuerte; los errores residuales son
+  `goal→corner` y `substitution→corner` (clases minoritarias, pocas muestras en test).
+
+### Concepto del curso / requerimiento
+- Refuerza el electivo **Optimización** (evidencia visual del impacto) y **Trazabilidad**
+  (artefactos versionados en MLflow).
+
+### Referencias al código
+- `backend/src/models/tune.py` (`save_optuna_plots`, `_confusion_png`, logging en
+  `run_tuning`). Test: `backend/tests/test_tune.py::test_save_optuna_plots_produces_files`.
+
+### Uso de IA generativa
+Complemento desarrollado con Claude Code (TDD del helper de plots, integración y ejecución).
+Revisado por el estudiante.

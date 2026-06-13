@@ -35,6 +35,7 @@ from src.features.preprocess import build_preprocessor
 from src.features.tabular import TABULAR_COLUMNS
 from src.models.config import DEFAULT_CONFIG_PATH as TRAIN_CONFIG_PATH
 from src.models.config import ModelSpec, SearchParamSpec, TrainConfig, TuningConfig
+from src.models.evaluate import save_confusion_matrix_png
 from src.models.export import ModelBundle, predict_frame, save_bundle
 from src.models.train import (
     SplitData,
@@ -124,6 +125,53 @@ def measure_latency_ms(
         times.append((time.perf_counter() - start) * 1000.0)
     arr = np.asarray(times)
     return {"p50_ms": float(np.percentile(arr, 50)), "p95_ms": float(np.percentile(arr, 95))}
+
+
+def save_optuna_plots(study, out_dir: Path) -> list[Path]:
+    """Render the study's optimisation-history and param-importance plots to ``out_dir``.
+
+    Best-effort (like ``save_confusion_matrix_png``): if matplotlib/optuna's matplotlib
+    backend is missing, or a plot can't be built (e.g. too few trials for fANOVA), that
+    plot is skipped. Returns the paths actually written. The ``shap``-free matplotlib
+    backend is used so this needs no plotly/kaleido.
+    """
+    try:
+        import matplotlib
+
+        matplotlib.use("Agg")
+        import matplotlib.pyplot as plt
+        from optuna.visualization.matplotlib import (
+            plot_optimization_history,
+            plot_param_importances,
+        )
+    except ImportError:
+        return []
+
+    out_dir.mkdir(parents=True, exist_ok=True)
+    written: list[Path] = []
+    plots = (
+        ("optuna_history", plot_optimization_history),
+        ("optuna_param_importances", plot_param_importances),
+    )
+    for name, fn in plots:
+        try:
+            ax = fn(study)
+            fig = ax.figure
+            fig.tight_layout()
+            path = out_dir / f"{name}.png"
+            fig.savefig(path, dpi=120)
+            plt.close(fig)
+            written.append(path)
+        except Exception:
+            continue
+    return written
+
+
+def _confusion_png(bundle: ModelBundle, test_split: SplitData, out_path: Path) -> Path | None:
+    """Render the confusion matrix for ``bundle`` on the test split (reuses evaluate.py)."""
+    _, proba = predict_frame(bundle, test_split.tabular, test_split.embedding)
+    y_pred = np.asarray(proba).argmax(axis=1)
+    return save_confusion_matrix_png(test_split.y, y_pred, bundle.classes, out_path)
 
 
 def _baseline_spec(train_cfg: TrainConfig, target_model: str) -> ModelSpec:
@@ -254,6 +302,11 @@ def run_tuning(train_cfg: TrainConfig, dataset_cfg: DatasetConfig) -> ModelBundl
     mlflow.set_experiment("optimization-v1")
     is_registry_capable = not train_cfg.mlflow.tracking_uri.startswith("file")
 
+    # Study-level figures (optimisation history + hyperparameter importances) — logged
+    # once, under the tuned-best run. Best-effort; empty if matplotlib is unavailable.
+    metrics_dir = train_cfg.paths.resolved("metrics_dir")
+    optuna_plots = save_optuna_plots(study, metrics_dir)
+
     # The bundle's tabular_columns is always the full request contract; the *used* subset
     # (feature selection) is reported separately, per model.
     for name, bundle, latency, selected in (
@@ -274,6 +327,13 @@ def run_tuning(train_cfg: TrainConfig, dataset_cfg: DatasetConfig) -> ModelBundl
             mlflow.set_tags({"dataset_hash": dataset_hash, "train_config_hash": config_hash})
             mlflow.log_metrics(_flatten_metrics(bundle.metrics, "test"))
             mlflow.log_metrics({f"latency_{k}": v for k, v in latency.items()})
+
+            cm_path = _confusion_png(bundle, splits["test"], metrics_dir / f"confusion_{name}.png")
+            if cm_path is not None:
+                mlflow.log_artifact(str(cm_path))
+            if name == "tuned-best":
+                for plot_path in optuna_plots:
+                    mlflow.log_artifact(str(plot_path))
 
     delta_f1 = tuned_bundle.metrics["macro_f1"] - baseline_bundle.metrics["macro_f1"]
     print(
