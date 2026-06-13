@@ -8,7 +8,7 @@ single shared inference path so training-time and serving-time predictions agree
 
 from __future__ import annotations
 
-from dataclasses import asdict, dataclass
+from dataclasses import asdict, dataclass, field
 from pathlib import Path
 from typing import Any
 
@@ -36,6 +36,10 @@ class ModelBundle:
     dataset_hash: str
     train_config_hash: str
     metrics: dict  # test-split summary surfaced by /model-info
+    # Class proportions in the TRAIN split — the reference distribution the API exposes as a
+    # Prometheus gauge, so monitoring can compare live predictions against it (drift baseline).
+    # Defaults to empty for backward compatibility with bundles/tests predating Fase 3.4.
+    train_class_ratio: dict[str, float] = field(default_factory=dict)
 
 
 def save_bundle(bundle: ModelBundle, model_dir: Path) -> Path:

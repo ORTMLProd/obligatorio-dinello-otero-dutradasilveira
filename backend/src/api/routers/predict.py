@@ -8,6 +8,8 @@ come from the bundle loaded into ``app.state`` at startup; nothing is re-fitted 
 
 from __future__ import annotations
 
+import time
+
 import numpy as np
 import pandas as pd
 from fastapi import APIRouter, HTTPException, Request
@@ -20,6 +22,8 @@ from src.api.schemas import (
 )
 from src.models.explain import grouped_contributions
 from src.models.export import ModelBundle, predict_frame
+from src.monitoring.logging import log_inference
+from src.monitoring.metrics import observe_latency, record_prediction
 
 router = APIRouter(tags=["inference"])
 
@@ -81,6 +85,27 @@ def _to_responses(
     ]
 
 
+def _serve(
+    items: list[PredictRequest], bundle: ModelBundle, explain: bool
+) -> list[PredictResponse]:
+    """Run inference and record monitoring signals: latency (per request), per-class counter
+    and a structured inference log per item — never logging the embedding (data policy)."""
+    start = time.perf_counter()
+    responses = _to_responses(items, bundle, explain)
+    latency_s = time.perf_counter() - start
+    observe_latency(latency_s)
+    for req, resp in zip(items, responses, strict=True):
+        record_prediction(resp.predicted_label, resp.model_version)
+        log_inference(
+            features=req.model_dump(exclude={"resnet_features"}),
+            predicted_label=resp.predicted_label,
+            probabilities=resp.probabilities,
+            model_version=resp.model_version,
+            latency_ms=round(latency_s * 1000 / len(items), 3),
+        )
+    return responses
+
+
 @router.post("/predict", response_model=PredictResponse)
 async def predict(req: PredictRequest, request: Request, explain: bool = True) -> PredictResponse:
     """Classify a single window into one of the event classes (or background).
@@ -88,7 +113,7 @@ async def predict(req: PredictRequest, request: Request, explain: bool = True) -
     Set ``?explain=false`` to skip the SHAP decomposition (lower latency).
     """
     bundle = _require_bundle(request)
-    return _to_responses([req], bundle, explain=explain)[0]
+    return _serve([req], bundle, explain=explain)[0]
 
 
 @router.post("/predict/batch", response_model=BatchPredictResponse)
@@ -100,4 +125,4 @@ async def predict_batch(
     SHAP is off by default for batch throughput; set ``?explain=true`` to include it.
     """
     bundle = _require_bundle(request)
-    return BatchPredictResponse(predictions=_to_responses(req.items, bundle, explain=explain))
+    return BatchPredictResponse(predictions=_serve(req.items, bundle, explain=explain))

@@ -73,6 +73,13 @@ def split_dataset(
     return out
 
 
+def class_ratio(y: np.ndarray, classes: list[str]) -> dict[str, float]:
+    """Class proportions in ``y`` — the train-split reference distribution for drift baseline."""
+    counts = np.bincount(y, minlength=len(classes))
+    total = int(counts.sum()) or 1
+    return {classes[i]: float(counts[i] / total) for i in range(len(classes))}
+
+
 def build_estimator(spec: ModelSpec, seed: int):
     """Instantiate an estimator from its config spec."""
     if spec.type == "logistic_regression":
@@ -218,6 +225,7 @@ def run(train_cfg: TrainConfig, dataset_cfg: DatasetConfig) -> ModelBundle:
                 dataset_hash=dataset_hash,
                 train_config_hash=config_hash,
                 metrics=test_metrics,
+                train_class_ratio=class_ratio(splits["train"].y, classes),
             )
 
     assert best is not None

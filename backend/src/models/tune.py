@@ -39,6 +39,7 @@ from src.models.evaluate import save_confusion_matrix_png
 from src.models.export import ModelBundle, predict_frame, save_bundle
 from src.models.train import (
     SplitData,
+    class_ratio,
     evaluate_on,
     fit_one,
     split_dataset,
@@ -216,6 +217,7 @@ def _fit_bundle(
         dataset_hash=dataset_hash,
         train_config_hash=config_hash,
         metrics=test_metrics,
+        train_class_ratio=class_ratio(splits["train"].y, classes),
     )
 
 

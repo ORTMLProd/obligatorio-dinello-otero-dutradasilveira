@@ -15,6 +15,8 @@ dependencies = [
     "scikit-learn>=1.5",
     "xgboost>=2.1",
     "joblib>=1.4",
+    # Prometheus metrics exposed at /metrics for monitoring (Fase 3). Runtime dep of the API.
+    "prometheus-client>=0.21",
 ]
 
 [dependency-groups]

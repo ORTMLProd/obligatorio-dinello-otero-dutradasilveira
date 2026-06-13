@@ -1,0 +1,11 @@
+# Prometheus scrapea el endpoint /metrics de la API (Fase 3.4).
+# Los nombres de host (api) los resuelve la red de docker-compose.
+global:
+  scrape_interval: 5s
+  evaluation_interval: 5s
+
+scrape_configs:
+  - job_name: soccernet-api
+    metrics_path: /metrics
+    static_configs:
+      - targets: ["api:8000"]
