@@ -474,3 +474,72 @@ regresión y fix con TDD). Revisado por el estudiante.
 Bloque desarrollado con asistencia de Claude Code (diseño, código y tests con TDD, construcción
 y ejecución del notebook, redacción de esta entrada). El estudiante revisó y validó cada
 decisión y es responsable de poder defenderla.
+
+---
+
+## 2026-06-12 — Fase 3.3: Frontend de visualización (React)
+
+### Qué se hizo
+- Se implementó el electivo de **visualización/UI**: un frontend React (Vite + Tailwind) que
+  consume la API y muestra la predicción de una ventana.
+- **Diseño validado con mockups primero** (convención del proyecto): se produjeron 3 direcciones
+  estáticas en `frontend/mockups/` (consola de telemetría, editorial, pizarra táctica) y el
+  equipo eligió la **pizarra táctica** antes de codear en React.
+- UI: header con `/model-info` (versión, macro-F1, estado), formulario con los 8 campos
+  tabulares editables + chips de **ejemplos pre-cargados** (uno por clase, exportados del split
+  de test a `frontend/src/examples.json`), y panel de predicción con cancha esquemática (evento
+  ubicado por clase), **barras de probabilidad**, **SHAP divergente** (campo `explanations` de la
+  API) y espacio reservado para el Grad-CAM.
+- **Rediseño por continuidad** (tras revisión): el panel de predicción está **siempre montado**
+  con estado idle/cargando/resultado (estructura estable, sin reflow); el resultado se rellena
+  con movimiento (caída del marcador, barrido de barras, reveal escalonado), respetando
+  `prefers-reduced-motion`.
+- Verificado end-to-end: dev (Vite proxy → API) y **stack docker completo** (`docker compose up`
+  → nginx :8080 proxea `/api` → predicción real con SHAP). Build de producción OK; lint y tsc
+  limpios.
+
+### Por qué se hizo así / concepto del curso
+- **Visualización/interacción con el modelo** (electivo): una UI para consultar predicciones y
+  ver la explicación, no solo la API cruda.
+- **El embedding viene de ejemplos pre-cargados**: la API necesita el ResNet-512 ya extraído,
+  que **no se puede reproducir desde píxeles** en serving (sería training-serving skew). Por eso
+  no se sube video/frame todavía; eso llega con la CNN v1 (3.5), donde el extractor es el mismo
+  en training y serving.
+- **NDA / gobernanza de datos**: no se muestran videos ni frames (prohibido commitearlos). Los
+  embeddings sí se pueden incluir (se descargan sin password). La cancha esquemática es la
+  representación NDA-safe; el slot del frame real queda para 3.5 (local-only).
+- **Sin CORS**: el frontend usa rutas relativas `/api/...` que el reverse-proxy (Vite en dev,
+  nginx en prod) reenvía al backend — mismo código en ambos entornos.
+- **Contrato compartido**: los tipos TS (`lib/types.ts`) reflejan los schemas pydantic; el
+  frontend es un consumidor más del contrato de la API.
+
+### Requerimiento de la consigna que cubre
+- Electivo **"Visualización / UI"** (cierra el 3.º electivo no-mínimo; con Trazabilidad,
+  Optimización y Explicabilidad ya van 4).
+- DoD de la fase: `docker compose up` sirve una predicción real desde la UI.
+
+### Alternativas consideradas y descartadas
+- **Direcciones estéticas editorial / consola de telemetría** → descartadas a favor de la
+  pizarra táctica (más memorable y contextual; la cancha como elemento que en 3.5 alojará el
+  frame + Grad-CAM).
+- **Endpoint `/examples` en la API** → descartado por ahora: obligaría a que la API cargue el
+  dataset (hoy solo carga el modelo). Se prefirió un JSON chico bundleado.
+- **Subir frame/video en 3.3** → no es posible sin la CNN propia (skew); diferido a 3.5.
+- **Panel de resultado que aparece/desaparece** → descartado tras revisión: rompía la
+  continuidad (reflow). Se pasó a un panel siempre presente con estados.
+- **shadcn/ui** → no se usó: el set de componentes es chico y a medida; Tailwind + CSS propio
+  alcanza y evita dependencia extra.
+
+### Limitaciones asumidas
+- La demo predice sobre **ventanas de ejemplo**, no sobre video real (límite de contrato + NDA).
+- `examples.json` (~40 KB) bundlea 5 embeddings; aceptable para la demo.
+
+### Referencias al código
+- App: `frontend/src/App.tsx`, `frontend/src/components/{WindowForm,PredictionPanel,Pitch}.tsx`.
+- Contrato/cliente: `frontend/src/lib/{types,api}.ts`. Estilos: `frontend/src/index.css`.
+- Ejemplos: `frontend/src/examples.json`. Mockups: `frontend/mockups/*.html`.
+
+### Uso de IA generativa
+Bloque desarrollado con asistencia de Claude Code (mockups, diseño y código React, verificación
+end-to-end con Playwright/Docker, redacción de esta entrada). El estudiante revisó la dirección
+visual y validó el resultado; es responsable de poder defenderlo.

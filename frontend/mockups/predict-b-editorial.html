@@ -1,0 +1,175 @@
+<!doctype html>
+<!-- MOCKUP B (no productivo) — dirección "editorial / revista deportiva", tema claro. -->
+<html lang="es">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>SoccerNet · Eventos — mockup editorial</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,400;9..144,600;9..144,900&family=Hanken+Grotesk:wght@400;500;600;700&family=JetBrains+Mono:wght@400;600&display=swap"
+      rel="stylesheet"
+    />
+    <style>
+      :root {
+        --paper: #f4efe4;
+        --paper-2: #fbf8f1;
+        --ink: #161310;
+        --ink-soft: #5b544c;
+        --line: #ddd4c2;
+        --red: #d8362a;
+        --green: #1f7a4d;
+      }
+      * { box-sizing: border-box; margin: 0; padding: 0; }
+      body {
+        font-family: "Hanken Grotesk", sans-serif; background: var(--paper); color: var(--ink);
+        min-height: 100vh; -webkit-font-smoothing: antialiased;
+        background-image: radial-gradient(1000px 400px at 100% 0, rgba(216,54,42,0.05), transparent 60%);
+      }
+      .mono { font-family: "JetBrains Mono", monospace; font-variant-numeric: tabular-nums; }
+      .serif { font-family: "Fraunces", serif; }
+      .wrap { max-width: 1140px; margin: 0 auto; padding: 30px 30px 60px; }
+
+      .masthead { border-bottom: 3px solid var(--ink); padding-bottom: 16px; }
+      .kicker {
+        display: flex; justify-content: space-between; align-items: center;
+        font-size: 0.68rem; letter-spacing: 0.22em; text-transform: uppercase; color: var(--ink-soft);
+      }
+      .kicker .live { color: var(--red); font-weight: 700; }
+      .masthead h1 {
+        font-family: "Fraunces", serif; font-weight: 900; font-size: 3rem; line-height: 0.96;
+        letter-spacing: -0.015em; margin-top: 8px;
+      }
+      .masthead .dek { font-size: 0.95rem; color: var(--ink-soft); margin-top: 8px; max-width: 60ch; }
+
+      .meta-strip {
+        display: flex; gap: 28px; margin-top: 14px; padding-top: 14px; border-top: 1px solid var(--line);
+        font-size: 0.78rem;
+      }
+      .meta-strip b { font-family: "JetBrains Mono", monospace; }
+      .meta-strip .it { color: var(--ink-soft); }
+
+      .grid { display: grid; grid-template-columns: 0.85fr 1.15fr; gap: 40px; margin-top: 30px; }
+      @media (max-width: 920px) { .grid { grid-template-columns: 1fr; gap: 28px; } }
+
+      .col-h { font-family:"Fraunces",serif; font-weight:600; font-size:0.84rem; letter-spacing:0.16em; text-transform:uppercase; color:var(--red); padding-bottom:8px; border-bottom:1px solid var(--ink); margin-bottom:18px; }
+
+      .chips { display: flex; flex-wrap: wrap; gap: 7px; margin-bottom: 22px; }
+      .chip { font-size:0.76rem; padding:6px 13px; border-radius:0; border:1px solid var(--ink); background:transparent; color:var(--ink); cursor:pointer; }
+      .chip.active { background: var(--ink); color: var(--paper); }
+
+      .note { font-size:0.76rem; color:var(--ink-soft); border-left:3px solid var(--green); padding:6px 12px; margin-bottom:22px; }
+      .note b { color: var(--green); }
+
+      .field { margin-bottom: 16px; }
+      .field label { display:block; font-size:0.66rem; letter-spacing:0.14em; text-transform:uppercase; color:var(--ink-soft); margin-bottom:6px; }
+      .row2 { display:grid; grid-template-columns:1fr 1fr; gap:14px; }
+      .control { width:100%; background:var(--paper-2); border:1px solid var(--line); border-bottom:2px solid var(--ink); color:var(--ink); padding:9px 11px; font-family:"JetBrains Mono",monospace; font-size:0.85rem; border-radius:0; }
+      .control:focus { outline:none; border-bottom-color:var(--red); }
+      .seg { display:flex; border:1px solid var(--ink); }
+      .seg button { flex:1; background:var(--paper-2); border:0; padding:9px 0; font-family:"JetBrains Mono",monospace; font-size:0.82rem; cursor:pointer; color:var(--ink-soft); }
+      .seg button.on { background: var(--ink); color: var(--paper); }
+      .seg button + button { border-left:1px solid var(--ink); }
+      .btn { width:100%; margin-top:8px; padding:14px; border:0; background:var(--red); color:var(--paper); font-family:"Fraunces",serif; font-weight:600; font-size:1.05rem; letter-spacing:0.02em; cursor:pointer; }
+
+      .verdict { display:flex; align-items:baseline; gap:18px; margin-bottom:8px; }
+      .verdict .cls { font-family:"Fraunces",serif; font-weight:900; font-size:4.4rem; line-height:0.9; letter-spacing:-0.02em; }
+      .verdict .conf { font-family:"JetBrains Mono",monospace; font-size:1.6rem; color:var(--red); font-weight:600; }
+      .verdict-sub { font-size:0.74rem; letter-spacing:0.16em; text-transform:uppercase; color:var(--ink-soft); margin-bottom:26px; }
+
+      .sec { font-family:"Fraunces",serif; font-weight:600; font-size:0.8rem; letter-spacing:0.14em; text-transform:uppercase; margin:24px 0 14px; }
+
+      .pbar { display:grid; grid-template-columns:130px 1fr 48px; align-items:center; gap:14px; margin-bottom:12px; }
+      .pbar .nm { font-size:0.85rem; }
+      .pbar.win .nm { font-weight:700; }
+      .pbar .tr { height:6px; background:var(--line); }
+      .pbar .fl { height:100%; background:var(--ink); }
+      .pbar.win .fl { background:var(--red); }
+      .pbar .vl { font-family:"JetBrains Mono",monospace; font-size:0.8rem; text-align:right; color:var(--ink-soft); }
+
+      .ledger { border-top:1px solid var(--ink); }
+      .lrow { display:grid; grid-template-columns:1fr auto; padding:9px 0; border-bottom:1px solid var(--line); align-items:center; }
+      .lrow .nm { font-family:"JetBrains Mono",monospace; font-size:0.78rem; }
+      .lrow .nm.visual { color: var(--green); }
+      .lrow .bar { display:inline-block; height:8px; vertical-align:middle; margin-right:10px; }
+      .lrow .bar.pos { background: var(--green); }
+      .lrow .bar.neg { background: var(--red); }
+      .lrow .vl { font-family:"JetBrains Mono",monospace; font-size:0.8rem; }
+
+      .gradcam { margin-top:24px; border:1.5px dashed var(--ink); padding:20px; text-align:center; }
+      .gradcam .b { font-family:"JetBrains Mono",monospace; font-size:0.62rem; letter-spacing:0.14em; text-transform:uppercase; color:var(--red); }
+      .gradcam .t { font-family:"Fraunces",serif; font-weight:600; font-size:1.05rem; margin-top:6px; }
+      .gradcam .d { font-size:0.78rem; color:var(--ink-soft); margin-top:4px; }
+      footer { margin-top:36px; padding-top:14px; border-top:1px solid var(--line); text-align:center; font-size:0.72rem; color:var(--ink-soft); letter-spacing:0.1em; }
+    </style>
+  </head>
+  <body>
+    <div class="wrap">
+      <div class="masthead">
+        <div class="kicker"><span>Clasificador de eventos · SoccerNet</span><span class="live">● en línea</span></div>
+        <h1>El parte del partido.</h1>
+        <div class="dek">Clasificación de ventanas de video en tipos de evento, combinando la señal visual del frame con el contexto táctico point-in-time.</div>
+        <div class="meta-strip">
+          <span class="it">Modelo <b>v1-tuned-xgboost</b></span>
+          <span class="it">Macro-F1 (test) <b>0.858</b></span>
+          <span class="it">Clases <b>5</b></span>
+        </div>
+      </div>
+
+      <div class="grid">
+        <section>
+          <div class="col-h">La ventana</div>
+          <div class="chips">
+            <span class="chip">goal</span><span class="chip active">corner</span><span class="chip">card</span><span class="chip">substitution</span><span class="chip">background</span>
+          </div>
+          <div class="note"><b>ResNet-512 cargado</b> · ventana #142 · england_epl</div>
+
+          <div class="row2">
+            <div class="field"><label>Mitad</label><div class="seg"><button>1ª</button><button class="on">2ª</button></div></div>
+            <div class="field"><label>Minuto</label><input class="control" value="38" /></div>
+          </div>
+          <div class="field"><label>Liga</label><select class="control"><option>england_epl</option></select></div>
+          <div class="row2">
+            <div class="field"><label>Dif. de score</label><input class="control" value="-1" /></div>
+            <div class="field"><label>Equipo</label><div class="seg"><button class="on">Local</button><button>Visita</button></div></div>
+          </div>
+          <div class="row2">
+            <div class="field"><label>Eventos hasta t</label><input class="control" value="19" /></div>
+            <div class="field"><label>Seg. último evento</label><input class="control" value="44.0" /></div>
+          </div>
+          <button class="btn">Predecir evento</button>
+        </section>
+
+        <section>
+          <div class="col-h">El veredicto</div>
+          <div class="verdict"><span class="cls">Corner</span><span class="conf">71%</span></div>
+          <div class="verdict-sub">Clase predicha · confianza</div>
+
+          <div class="sec">Probabilidades por clase</div>
+          <div class="pbar win"><span class="nm">corner</span><span class="tr"><span class="fl" style="width:71%"></span></span><span class="vl">0.71</span></div>
+          <div class="pbar"><span class="nm">substitution</span><span class="tr"><span class="fl" style="width:14%"></span></span><span class="vl">0.14</span></div>
+          <div class="pbar"><span class="nm">background</span><span class="tr"><span class="fl" style="width:7%"></span></span><span class="vl">0.07</span></div>
+          <div class="pbar"><span class="nm">goal</span><span class="tr"><span class="fl" style="width:5%"></span></span><span class="vl">0.05</span></div>
+          <div class="pbar"><span class="nm">card</span><span class="tr"><span class="fl" style="width:3%"></span></span><span class="vl">0.03</span></div>
+
+          <div class="sec">Por qué — aportes SHAP</div>
+          <div class="ledger">
+            <div class="lrow"><span class="nm"><span class="bar pos" style="width:60px"></span>team_is_home</span><span class="vl">+1.21</span></div>
+            <div class="lrow"><span class="nm visual"><span class="bar neg" style="width:24px"></span>visual_embedding</span><span class="vl">−0.47</span></div>
+            <div class="lrow"><span class="nm"><span class="bar pos" style="width:14px"></span>secs_since_last_event</span><span class="vl">+0.26</span></div>
+            <div class="lrow"><span class="nm"><span class="bar pos" style="width:10px"></span>visible</span><span class="vl">+0.18</span></div>
+            <div class="lrow"><span class="nm"><span class="bar neg" style="width:5px"></span>half</span><span class="vl">−0.08</span></div>
+          </div>
+
+          <div class="gradcam">
+            <div class="b">Próximamente · v1</div>
+            <div class="t">Mapa Grad-CAM sobre el frame</div>
+            <div class="d">Se habilita con la CNN fine-tuneada (Fase 3.5).</div>
+          </div>
+        </section>
+      </div>
+      <footer>Mockup estático · dirección editorial · datos de ejemplo</footer>
+    </div>
+  </body>
+</html>
