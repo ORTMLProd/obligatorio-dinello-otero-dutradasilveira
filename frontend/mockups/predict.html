@@ -1,0 +1,376 @@
+<!doctype html>
+<!--
+  MOCKUP ESTÁTICO (no productivo) — Fase 3.3, dirección visual del frontend.
+  Datos hardcodeados para revisar layout y estética antes de implementar en React.
+  Dirección: consola de telemetría tipo transmisión deportiva.
+-->
+<html lang="es">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>SoccerNet · Clasificador de eventos — mockup</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      href="https://fonts.googleapis.com/css2?family=Anton&family=Hanken+Grotesk:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;700&display=swap"
+      rel="stylesheet"
+    />
+    <style>
+      :root {
+        --bg: #070b09;
+        --panel: #0d1411;
+        --panel-2: #111a16;
+        --line: #1d2a23;
+        --line-bright: #2b3d33;
+        --ink: #e8f1ec;
+        --muted: #7d9389;
+        --pitch: #34e07a;
+        --pitch-dim: #1f9a52;
+        --cyan: #46d6e0;
+        --amber: #ffc14d;
+        --red: #ff6b6b;
+      }
+      * { box-sizing: border-box; margin: 0; padding: 0; }
+      html { font-size: 16px; }
+      body {
+        font-family: "Hanken Grotesk", sans-serif;
+        background: var(--bg);
+        color: var(--ink);
+        min-height: 100vh;
+        -webkit-font-smoothing: antialiased;
+        background-image:
+          radial-gradient(1200px 500px at 80% -10%, rgba(52, 224, 122, 0.08), transparent 60%),
+          repeating-linear-gradient(0deg, transparent 0 39px, rgba(255, 255, 255, 0.012) 39px 40px);
+      }
+      .mono { font-family: "JetBrains Mono", monospace; font-variant-numeric: tabular-nums; }
+      .wrap { max-width: 1180px; margin: 0 auto; padding: 28px 28px 64px; }
+
+      /* ---------- Top bar ---------- */
+      header {
+        display: flex; align-items: center; justify-content: space-between;
+        gap: 20px; padding-bottom: 20px; border-bottom: 1px solid var(--line);
+      }
+      .brand { display: flex; align-items: center; gap: 14px; }
+      .crest {
+        width: 42px; height: 42px; border-radius: 11px; position: relative;
+        background: linear-gradient(150deg, var(--pitch), var(--pitch-dim));
+        box-shadow: 0 0 0 1px rgba(52, 224, 122, 0.35), 0 8px 26px -10px rgba(52, 224, 122, 0.7);
+        flex: none;
+      }
+      .crest::after {
+        content: ""; position: absolute; inset: 0; border-radius: 11px;
+        background:
+          radial-gradient(circle at 50% 50%, transparent 9px, rgba(7, 11, 9, 0.85) 9px 10px, transparent 10px),
+          linear-gradient(90deg, transparent 49%, rgba(7, 11, 9, 0.85) 49% 51%, transparent 51%);
+      }
+      .brand h1 {
+        font-family: "Anton", sans-serif; font-weight: 400; font-size: 1.55rem;
+        letter-spacing: 0.04em; text-transform: uppercase; line-height: 1;
+      }
+      .brand .sub { color: var(--muted); font-size: 0.74rem; letter-spacing: 0.14em; text-transform: uppercase; margin-top: 4px; }
+
+      .model-badge {
+        display: flex; align-items: stretch; gap: 0; border: 1px solid var(--line);
+        border-radius: 12px; overflow: hidden; background: var(--panel);
+      }
+      .model-badge .cell { padding: 9px 15px; border-right: 1px solid var(--line); }
+      .model-badge .cell:last-child { border-right: 0; }
+      .model-badge .k { color: var(--muted); font-size: 0.62rem; letter-spacing: 0.13em; text-transform: uppercase; }
+      .model-badge .v { font-size: 0.92rem; margin-top: 3px; }
+      .dot { width: 8px; height: 8px; border-radius: 50%; background: var(--pitch); display: inline-block; box-shadow: 0 0 8px var(--pitch); }
+
+      /* ---------- Grid ---------- */
+      .grid { display: grid; grid-template-columns: 0.92fr 1.08fr; gap: 22px; margin-top: 24px; }
+      @media (max-width: 940px) { .grid { grid-template-columns: 1fr; } }
+
+      .panel { background: var(--panel); border: 1px solid var(--line); border-radius: 16px; }
+      .panel-h {
+        display: flex; align-items: center; justify-content: space-between;
+        padding: 15px 18px; border-bottom: 1px solid var(--line);
+      }
+      .panel-h .label {
+        font-family: "Anton", sans-serif; font-size: 0.92rem; letter-spacing: 0.1em;
+        text-transform: uppercase; color: var(--ink);
+      }
+      .panel-h .tag { color: var(--muted); font-size: 0.66rem; letter-spacing: 0.13em; text-transform: uppercase; }
+      .panel-b { padding: 18px; }
+
+      /* ---------- Example chips ---------- */
+      .chips { display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 20px; }
+      .chip {
+        font-family: "JetBrains Mono", monospace; font-size: 0.72rem; letter-spacing: 0.04em;
+        padding: 7px 12px; border-radius: 999px; border: 1px solid var(--line-bright);
+        color: var(--muted); background: var(--panel-2); cursor: pointer; user-select: none;
+        transition: all 0.16s ease;
+      }
+      .chip:hover { color: var(--ink); border-color: var(--pitch-dim); }
+      .chip.active {
+        color: var(--bg); background: var(--pitch); border-color: var(--pitch);
+        font-weight: 700; box-shadow: 0 6px 18px -8px var(--pitch);
+      }
+
+      /* ---------- Form ---------- */
+      .field { margin-bottom: 15px; }
+      .field > label {
+        display: block; font-size: 0.66rem; letter-spacing: 0.13em; text-transform: uppercase;
+        color: var(--muted); margin-bottom: 7px;
+      }
+      .row2 { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; }
+      .control {
+        width: 100%; background: var(--panel-2); border: 1px solid var(--line-bright); color: var(--ink);
+        border-radius: 9px; padding: 10px 12px; font-family: "JetBrains Mono", monospace; font-size: 0.86rem;
+      }
+      .control:focus { outline: none; border-color: var(--pitch-dim); box-shadow: 0 0 0 3px rgba(52, 224, 122, 0.12); }
+      .seg { display: flex; border: 1px solid var(--line-bright); border-radius: 9px; overflow: hidden; }
+      .seg button {
+        flex: 1; background: var(--panel-2); border: 0; color: var(--muted); padding: 10px 0;
+        font-family: "JetBrains Mono", monospace; font-size: 0.84rem; cursor: pointer; transition: all 0.14s;
+      }
+      .seg button.on { background: rgba(52, 224, 122, 0.14); color: var(--pitch); font-weight: 700; }
+      .seg button + button { border-left: 1px solid var(--line-bright); }
+
+      .emb-status {
+        display: flex; align-items: center; gap: 10px; margin: 4px 0 18px;
+        padding: 11px 13px; border: 1px dashed var(--line-bright); border-radius: 10px;
+        background: rgba(70, 214, 224, 0.04);
+      }
+      .emb-status .ic { color: var(--cyan); font-size: 1rem; }
+      .emb-status .t { font-size: 0.78rem; color: var(--ink); }
+      .emb-status .t span { color: var(--muted); }
+
+      .btn-predict {
+        width: 100%; padding: 14px; border: 0; border-radius: 11px; cursor: pointer;
+        font-family: "Anton", sans-serif; letter-spacing: 0.08em; text-transform: uppercase; font-size: 1rem;
+        color: var(--bg); background: linear-gradient(120deg, var(--pitch), var(--pitch-dim));
+        box-shadow: 0 12px 30px -12px var(--pitch); transition: transform 0.12s;
+      }
+      .btn-predict:hover { transform: translateY(-1px); }
+
+      /* ---------- Result ---------- */
+      .verdict {
+        display: flex; align-items: flex-end; justify-content: space-between; gap: 16px;
+        padding: 20px; border-radius: 13px; margin-bottom: 20px;
+        background:
+          radial-gradient(700px 200px at 0% 0%, rgba(52, 224, 122, 0.13), transparent 65%),
+          var(--panel-2);
+        border: 1px solid var(--line-bright);
+      }
+      .verdict .pre { color: var(--muted); font-size: 0.66rem; letter-spacing: 0.16em; text-transform: uppercase; }
+      .verdict .cls {
+        font-family: "Anton", sans-serif; font-size: 3.2rem; line-height: 0.92; text-transform: uppercase;
+        letter-spacing: 0.01em; margin-top: 6px; color: var(--pitch);
+      }
+      .verdict .conf { text-align: right; }
+      .verdict .conf .num { font-family: "JetBrains Mono", monospace; font-size: 2.2rem; font-weight: 700; }
+      .verdict .conf .lbl { color: var(--muted); font-size: 0.66rem; letter-spacing: 0.13em; text-transform: uppercase; }
+
+      .section-t {
+        font-size: 0.68rem; letter-spacing: 0.14em; text-transform: uppercase; color: var(--muted);
+        margin: 22px 0 12px; display: flex; align-items: center; gap: 10px;
+      }
+      .section-t::after { content: ""; flex: 1; height: 1px; background: var(--line); }
+
+      /* probability bars */
+      .pbar { margin-bottom: 11px; }
+      .pbar .top { display: flex; justify-content: space-between; align-items: baseline; margin-bottom: 5px; }
+      .pbar .name { font-size: 0.82rem; letter-spacing: 0.02em; }
+      .pbar.win .name { color: var(--pitch); font-weight: 700; }
+      .pbar .val { font-family: "JetBrains Mono", monospace; font-size: 0.82rem; color: var(--muted); }
+      .pbar.win .val { color: var(--pitch); }
+      .track { height: 9px; background: var(--panel-2); border-radius: 6px; overflow: hidden; border: 1px solid var(--line); }
+      .fill { height: 100%; border-radius: 6px; background: linear-gradient(90deg, var(--pitch-dim), var(--pitch)); }
+      .fill.dim { background: var(--line-bright); }
+
+      /* shap diverging */
+      .shap-row { display: grid; grid-template-columns: 130px 1fr 64px; align-items: center; gap: 10px; margin-bottom: 8px; }
+      .shap-row .nm { font-family: "JetBrains Mono", monospace; font-size: 0.73rem; color: var(--ink); text-align: right; }
+      .shap-row .nm.visual { color: var(--cyan); }
+      .shap-track { position: relative; height: 16px; }
+      .shap-track .axis { position: absolute; left: 50%; top: -2px; bottom: -2px; width: 1px; background: var(--line-bright); }
+      .shap-bar { position: absolute; top: 3px; height: 10px; border-radius: 3px; }
+      .shap-bar.pos { left: 50%; background: linear-gradient(90deg, var(--pitch-dim), var(--pitch)); }
+      .shap-bar.neg { right: 50%; background: linear-gradient(90deg, var(--red), #b83b3b); }
+      .shap-row .sv { font-family: "JetBrains Mono", monospace; font-size: 0.72rem; color: var(--muted); }
+
+      /* gradcam placeholder */
+      .gradcam {
+        margin-top: 22px; border: 1px dashed var(--line-bright); border-radius: 12px; padding: 22px;
+        text-align: center; background: rgba(255, 193, 77, 0.03);
+      }
+      .gradcam .badge {
+        display: inline-block; font-family: "JetBrains Mono", monospace; font-size: 0.62rem; letter-spacing: 0.12em;
+        text-transform: uppercase; color: var(--amber); border: 1px solid rgba(255, 193, 77, 0.35);
+        padding: 3px 9px; border-radius: 999px; margin-bottom: 10px;
+      }
+      .gradcam .t { font-size: 0.84rem; color: var(--ink); }
+      .gradcam .d { font-size: 0.74rem; color: var(--muted); margin-top: 4px; }
+
+      footer { margin-top: 30px; text-align: center; color: var(--muted); font-size: 0.7rem; letter-spacing: 0.08em; }
+    </style>
+  </head>
+  <body>
+    <div class="wrap">
+      <header>
+        <div class="brand">
+          <div class="crest"></div>
+          <div>
+            <h1>SoccerNet · Eventos</h1>
+            <div class="sub">Clasificador de ventanas · ML en Producción</div>
+          </div>
+        </div>
+        <div class="model-badge">
+          <div class="cell"><div class="k">Modelo</div><div class="v mono">v1-tuned-xgboost</div></div>
+          <div class="cell"><div class="k">Macro-F1 (test)</div><div class="v mono">0.858</div></div>
+          <div class="cell"><div class="k">Estado</div><div class="v"><span class="dot"></span> en línea</div></div>
+        </div>
+      </header>
+
+      <div class="grid">
+        <!-- INPUT -->
+        <section class="panel">
+          <div class="panel-h">
+            <span class="label">Ventana</span>
+            <span class="tag">entrada · /predict</span>
+          </div>
+          <div class="panel-b">
+            <label style="display:block;font-size:0.66rem;letter-spacing:0.13em;text-transform:uppercase;color:var(--muted);margin-bottom:9px;">Ejemplos del test</label>
+            <div class="chips">
+              <div class="chip">goal</div>
+              <div class="chip active">corner</div>
+              <div class="chip">card</div>
+              <div class="chip">substitution</div>
+              <div class="chip">background</div>
+            </div>
+
+            <div class="emb-status">
+              <span class="ic">◈</span>
+              <span class="t">ResNet-512 cargado <span>· ventana #142 · liga england_epl</span></span>
+            </div>
+
+            <div class="row2">
+              <div class="field">
+                <label>Mitad</label>
+                <div class="seg"><button>1ª</button><button class="on">2ª</button></div>
+              </div>
+              <div class="field">
+                <label>Minuto (en la mitad)</label>
+                <input class="control" value="38" />
+              </div>
+            </div>
+
+            <div class="field">
+              <label>Liga</label>
+              <select class="control"><option>england_epl</option><option>spain_laliga</option></select>
+            </div>
+
+            <div class="row2">
+              <div class="field">
+                <label>Dif. de score (point-in-time)</label>
+                <input class="control" value="-1" />
+              </div>
+              <div class="field">
+                <label>Equipo</label>
+                <div class="seg"><button class="on">Local</button><button>Visita</button></div>
+              </div>
+            </div>
+
+            <div class="row2">
+              <div class="field">
+                <label>Eventos hasta t</label>
+                <input class="control" value="19" />
+              </div>
+              <div class="field">
+                <label>Seg. desde último evento</label>
+                <input class="control" value="44.0" />
+              </div>
+            </div>
+
+            <div class="field">
+              <label>Visible en pantalla</label>
+              <div class="seg"><button class="on">Sí</button><button>No</button></div>
+            </div>
+
+            <button class="btn-predict">Predecir evento ▸</button>
+          </div>
+        </section>
+
+        <!-- OUTPUT -->
+        <section class="panel">
+          <div class="panel-h">
+            <span class="label">Predicción</span>
+            <span class="tag mono">~3 ms</span>
+          </div>
+          <div class="panel-b">
+            <div class="verdict">
+              <div>
+                <div class="pre">Clase predicha</div>
+                <div class="cls">Corner</div>
+              </div>
+              <div class="conf">
+                <div class="num">71%</div>
+                <div class="lbl">confianza</div>
+              </div>
+            </div>
+
+            <div class="section-t">Probabilidades por clase</div>
+            <div class="pbar win">
+              <div class="top"><span class="name">corner</span><span class="val">0.71</span></div>
+              <div class="track"><div class="fill" style="width:71%"></div></div>
+            </div>
+            <div class="pbar">
+              <div class="top"><span class="name">substitution</span><span class="val">0.14</span></div>
+              <div class="track"><div class="fill dim" style="width:14%"></div></div>
+            </div>
+            <div class="pbar">
+              <div class="top"><span class="name">background</span><span class="val">0.07</span></div>
+              <div class="track"><div class="fill dim" style="width:7%"></div></div>
+            </div>
+            <div class="pbar">
+              <div class="top"><span class="name">goal</span><span class="val">0.05</span></div>
+              <div class="track"><div class="fill dim" style="width:5%"></div></div>
+            </div>
+            <div class="pbar">
+              <div class="top"><span class="name">card</span><span class="val">0.03</span></div>
+              <div class="track"><div class="fill dim" style="width:3%"></div></div>
+            </div>
+
+            <div class="section-t">Explicación SHAP · aporte a la clase</div>
+            <div class="shap-row">
+              <span class="nm">team_is_home</span>
+              <span class="shap-track"><span class="axis"></span><span class="shap-bar pos" style="width:42%"></span></span>
+              <span class="sv">+1.21</span>
+            </div>
+            <div class="shap-row">
+              <span class="nm visual">visual_embedding</span>
+              <span class="shap-track"><span class="axis"></span><span class="shap-bar neg" style="width:16%"></span></span>
+              <span class="sv">−0.47</span>
+            </div>
+            <div class="shap-row">
+              <span class="nm">secs_since_last…</span>
+              <span class="shap-track"><span class="axis"></span><span class="shap-bar pos" style="width:9%"></span></span>
+              <span class="sv">+0.26</span>
+            </div>
+            <div class="shap-row">
+              <span class="nm">visible</span>
+              <span class="shap-track"><span class="axis"></span><span class="shap-bar pos" style="width:6%"></span></span>
+              <span class="sv">+0.18</span>
+            </div>
+            <div class="shap-row">
+              <span class="nm">half</span>
+              <span class="shap-track"><span class="axis"></span><span class="shap-bar neg" style="width:3%"></span></span>
+              <span class="sv">−0.08</span>
+            </div>
+
+            <div class="gradcam">
+              <div class="badge">Próximamente · v1</div>
+              <div class="t">Overlay Grad-CAM sobre el frame</div>
+              <div class="d">Se habilita con la CNN fine-tuneada (Fase 3.5). El espacio queda reservado.</div>
+            </div>
+          </div>
+        </section>
+      </div>
+
+      <footer>Mockup estático · dirección visual Fase 3.3 · datos de ejemplo</footer>
+    </div>
+  </body>
+</html>

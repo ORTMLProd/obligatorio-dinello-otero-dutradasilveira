@@ -1,0 +1,192 @@
+<!doctype html>
+<!-- MOCKUP C (no productivo) — dirección "pizarra táctica", la cancha como protagonista. -->
+<html lang="es">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>SoccerNet · Eventos — mockup táctico</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      href="https://fonts.googleapis.com/css2?family=Sora:wght@400;600;800&family=DM+Mono:wght@400;500&display=swap"
+      rel="stylesheet"
+    />
+    <style>
+      :root {
+        --board: #0a2622;
+        --board-2: #0e302a;
+        --panel: #103a32;
+        --chalk: #eaf3ef;
+        --chalk-dim: #7fa79b;
+        --line: #225349;
+        --amber: #ffb13b;
+        --lime: #7ee081;
+        --red: #ff7a7a;
+      }
+      * { box-sizing: border-box; margin: 0; padding: 0; }
+      body {
+        font-family: "Sora", sans-serif; background: var(--board); color: var(--chalk);
+        min-height: 100vh; -webkit-font-smoothing: antialiased;
+        background-image:
+          radial-gradient(900px 500px at 50% -20%, rgba(126,224,129,0.07), transparent 60%),
+          repeating-linear-gradient(90deg, transparent 0 59px, rgba(255,255,255,0.018) 59px 60px);
+      }
+      .mono { font-family: "DM Mono", monospace; font-variant-numeric: tabular-nums; }
+      .wrap { max-width: 1160px; margin: 0 auto; padding: 26px 26px 60px; }
+
+      header { display:flex; justify-content:space-between; align-items:center; border-bottom:1px dashed var(--line); padding-bottom:18px; }
+      .brand { display:flex; align-items:center; gap:13px; }
+      .ball { width:38px; height:38px; border-radius:50%; border:2px solid var(--chalk); position:relative; flex:none; }
+      .ball::before { content:""; position:absolute; inset:8px; border-radius:50%; border:1.5px solid var(--chalk-dim); }
+      .brand h1 { font-size:1.35rem; font-weight:800; letter-spacing:-0.01em; }
+      .brand .s { font-size:0.7rem; letter-spacing:0.16em; text-transform:uppercase; color:var(--chalk-dim); margin-top:2px; }
+      .hdr-meta { display:flex; gap:18px; font-family:"DM Mono",monospace; font-size:0.78rem; }
+      .hdr-meta .k { color:var(--chalk-dim); font-size:0.6rem; letter-spacing:0.12em; text-transform:uppercase; }
+
+      .grid { display:grid; grid-template-columns:1fr 1fr; gap:22px; margin-top:24px; }
+      @media (max-width: 920px) { .grid { grid-template-columns:1fr; } }
+      .card { background:var(--board-2); border:1px solid var(--line); border-radius:14px; padding:20px; }
+      .card-t { font-size:0.7rem; letter-spacing:0.16em; text-transform:uppercase; color:var(--amber); margin-bottom:16px; }
+
+      /* pitch hero */
+      .pitch-card { grid-column: 1 / -1; }
+      .pitch-wrap { display:grid; grid-template-columns: 1.4fr 1fr; gap:22px; align-items:center; }
+      @media (max-width: 720px) { .pitch-wrap { grid-template-columns:1fr; } }
+      .pitch { width:100%; border-radius:10px; background:linear-gradient(160deg,#0f3a31,#0c2e28); border:1px solid var(--line); }
+      .verdict .pre { font-size:0.68rem; letter-spacing:0.16em; text-transform:uppercase; color:var(--chalk-dim); }
+      .verdict .cls { font-size:3rem; font-weight:800; line-height:1; color:var(--amber); margin:6px 0 2px; letter-spacing:-0.01em; }
+      .verdict .conf { font-family:"DM Mono",monospace; font-size:1.1rem; color:var(--lime); }
+      .verdict .desc { font-size:0.82rem; color:var(--chalk-dim); margin-top:14px; line-height:1.5; }
+
+      .chips { display:flex; flex-wrap:wrap; gap:7px; margin-bottom:18px; }
+      .chip { font-family:"DM Mono",monospace; font-size:0.72rem; padding:6px 12px; border-radius:8px; border:1px solid var(--line); color:var(--chalk-dim); background:var(--panel); cursor:pointer; }
+      .chip.active { color:var(--board); background:var(--amber); border-color:var(--amber); font-weight:500; }
+
+      .field { margin-bottom:14px; }
+      .field label { display:block; font-size:0.64rem; letter-spacing:0.13em; text-transform:uppercase; color:var(--chalk-dim); margin-bottom:6px; }
+      .row2 { display:grid; grid-template-columns:1fr 1fr; gap:12px; }
+      .control { width:100%; background:var(--panel); border:1px solid var(--line); color:var(--chalk); border-radius:8px; padding:9px 11px; font-family:"DM Mono",monospace; font-size:0.84rem; }
+      .control:focus { outline:none; border-color:var(--amber); }
+      .seg { display:flex; border:1px solid var(--line); border-radius:8px; overflow:hidden; }
+      .seg button { flex:1; background:var(--panel); border:0; color:var(--chalk-dim); padding:9px 0; font-family:"DM Mono",monospace; font-size:0.82rem; cursor:pointer; }
+      .seg button.on { background:rgba(255,177,59,0.16); color:var(--amber); }
+      .seg button + button { border-left:1px solid var(--line); }
+      .btn { width:100%; margin-top:6px; padding:13px; border:0; border-radius:9px; background:var(--amber); color:var(--board); font-family:"Sora",sans-serif; font-weight:800; font-size:0.95rem; cursor:pointer; }
+
+      .pbar { margin-bottom:10px; }
+      .pbar .top { display:flex; justify-content:space-between; margin-bottom:5px; font-size:0.8rem; }
+      .pbar.win .top { color:var(--amber); font-weight:600; }
+      .pbar .vl { font-family:"DM Mono",monospace; color:var(--chalk-dim); }
+      .pbar.win .vl { color:var(--amber); }
+      .tr { height:8px; background:var(--panel); border-radius:5px; overflow:hidden; }
+      .fl { height:100%; background:linear-gradient(90deg,#3a8f6a,var(--lime)); border-radius:5px; }
+      .fl.dim { background:var(--line); }
+
+      .shap { display:grid; grid-template-columns:120px 1fr 56px; align-items:center; gap:9px; margin-bottom:7px; }
+      .shap .nm { font-family:"DM Mono",monospace; font-size:0.71rem; text-align:right; color:var(--chalk); }
+      .shap .nm.visual { color:var(--lime); }
+      .st { position:relative; height:14px; }
+      .st .ax { position:absolute; left:50%; top:0; bottom:0; width:1px; background:var(--line); }
+      .sb { position:absolute; top:2px; height:10px; border-radius:3px; }
+      .sb.pos { left:50%; background:var(--lime); }
+      .sb.neg { right:50%; background:var(--red); }
+      .shap .sv { font-family:"DM Mono",monospace; font-size:0.7rem; color:var(--chalk-dim); }
+
+      .gradcam { grid-column:1/-1; border:1px dashed var(--line); border-radius:12px; padding:18px; text-align:center; background:rgba(255,177,59,0.03); }
+      .gradcam .b { font-family:"DM Mono",monospace; font-size:0.62rem; letter-spacing:0.13em; text-transform:uppercase; color:var(--amber); }
+      .gradcam .t { font-weight:600; margin-top:6px; }
+      .gradcam .d { font-size:0.76rem; color:var(--chalk-dim); margin-top:3px; }
+      footer { margin-top:28px; text-align:center; font-size:0.7rem; color:var(--chalk-dim); letter-spacing:0.08em; }
+    </style>
+  </head>
+  <body>
+    <div class="wrap">
+      <header>
+        <div class="brand">
+          <div class="ball"></div>
+          <div><h1>SoccerNet · Eventos</h1><div class="s">Pizarra de clasificación</div></div>
+        </div>
+        <div class="hdr-meta">
+          <div><div class="k">Modelo</div>v1-tuned-xgboost</div>
+          <div><div class="k">Macro-F1</div>0.858</div>
+          <div><div class="k">Estado</div><span style="color:var(--lime)">● en línea</span></div>
+        </div>
+      </header>
+
+      <!-- PITCH HERO -->
+      <div class="card pitch-card" style="margin-top:24px">
+        <div class="card-t">Lectura de la jugada</div>
+        <div class="pitch-wrap">
+          <svg class="pitch" viewBox="0 0 360 230" role="img" aria-label="cancha">
+            <g fill="none" stroke="#5fae93" stroke-width="1.4" opacity="0.85">
+              <rect x="8" y="8" width="344" height="214" rx="3" />
+              <line x1="180" y1="8" x2="180" y2="222" />
+              <circle cx="180" cy="115" r="34" />
+              <circle cx="180" cy="115" r="2.5" fill="#5fae93" />
+              <rect x="8" y="62" width="52" height="106" />
+              <rect x="300" y="62" width="52" height="106" />
+              <rect x="8" y="92" width="20" height="46" />
+              <rect x="332" y="92" width="20" height="46" />
+            </g>
+            <!-- corner event marker -->
+            <g>
+              <circle cx="345" cy="15" r="9" fill="#ffb13b" opacity="0.25" />
+              <circle cx="345" cy="15" r="4.5" fill="#ffb13b" />
+              <path d="M345 15 L300 70" stroke="#ffb13b" stroke-width="1.4" stroke-dasharray="3 3" opacity="0.7" />
+            </g>
+            <text x="16" y="214" fill="#7fa79b" font-family="DM Mono, monospace" font-size="8">2ª · 38'</text>
+          </svg>
+          <div class="verdict">
+            <div class="pre">Clase predicha</div>
+            <div class="cls">Corner</div>
+            <div class="conf">71% confianza</div>
+            <div class="desc">Tiro de esquina detectado en el área visitante. El contexto táctico (equipo local, tiempo desde el último evento) pesó más que la señal visual.</div>
+          </div>
+        </div>
+      </div>
+
+      <div class="grid">
+        <section class="card">
+          <div class="card-t">La ventana · entrada</div>
+          <div class="chips"><span class="chip">goal</span><span class="chip active">corner</span><span class="chip">card</span><span class="chip">substitution</span><span class="chip">background</span></div>
+          <div class="row2">
+            <div class="field"><label>Mitad</label><div class="seg"><button>1ª</button><button class="on">2ª</button></div></div>
+            <div class="field"><label>Minuto</label><input class="control" value="38" /></div>
+          </div>
+          <div class="field"><label>Liga</label><select class="control"><option>england_epl</option></select></div>
+          <div class="row2">
+            <div class="field"><label>Dif. de score</label><input class="control" value="-1" /></div>
+            <div class="field"><label>Equipo</label><div class="seg"><button class="on">Local</button><button>Visita</button></div></div>
+          </div>
+          <div class="row2">
+            <div class="field"><label>Eventos hasta t</label><input class="control" value="19" /></div>
+            <div class="field"><label>Seg. último evento</label><input class="control" value="44.0" /></div>
+          </div>
+          <button class="btn">Predecir evento</button>
+        </section>
+
+        <section class="card">
+          <div class="card-t">Probabilidades + SHAP</div>
+          <div class="pbar win"><div class="top"><span>corner</span><span class="vl">0.71</span></div><div class="tr"><div class="fl" style="width:71%"></div></div></div>
+          <div class="pbar"><div class="top"><span>substitution</span><span class="vl">0.14</span></div><div class="tr"><div class="fl dim" style="width:14%"></div></div></div>
+          <div class="pbar"><div class="top"><span>background</span><span class="vl">0.07</span></div><div class="tr"><div class="fl dim" style="width:7%"></div></div></div>
+          <div class="pbar"><div class="top"><span>goal</span><span class="vl">0.05</span></div><div class="tr"><div class="fl dim" style="width:5%"></div></div></div>
+          <div class="pbar"><div class="top"><span>card</span><span class="vl">0.03</span></div><div class="tr"><div class="fl dim" style="width:3%"></div></div></div>
+
+          <div style="height:14px"></div>
+          <div class="shap"><span class="nm">team_is_home</span><span class="st"><span class="ax"></span><span class="sb pos" style="width:42%"></span></span><span class="sv">+1.21</span></div>
+          <div class="shap"><span class="nm visual">visual_embedding</span><span class="st"><span class="ax"></span><span class="sb neg" style="width:16%"></span></span><span class="sv">−0.47</span></div>
+          <div class="shap"><span class="nm">secs_since…</span><span class="st"><span class="ax"></span><span class="sb pos" style="width:9%"></span></span><span class="sv">+0.26</span></div>
+          <div class="shap"><span class="nm">visible</span><span class="st"><span class="ax"></span><span class="sb pos" style="width:6%"></span></span><span class="sv">+0.18</span></div>
+        </section>
+
+        <div class="gradcam">
+          <div class="b">Próximamente · v1</div>
+          <div class="t">Overlay Grad-CAM sobre el frame</div>
+          <div class="d">Se habilita con la CNN fine-tuneada (Fase 3.5). El espacio queda reservado.</div>
+        </div>
+      </div>
+      <footer>Mockup estático · dirección pizarra táctica · datos de ejemplo</footer>
+    </div>
+  </body>
+</html>

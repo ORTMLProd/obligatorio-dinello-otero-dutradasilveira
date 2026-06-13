@@ -1,1 +1,506 @@
 @import "tailwindcss";
+
+/*
+  Sistema de diseño "pizarra táctica" (Fase 3.3). Tokens + clases de componentes
+  portadas del mockup validado (frontend/mockups/predict-c-tactical.html).
+  Estructura estable de 2 columnas: el panel de predicción está SIEMPRE presente
+  (estado idle con carácter) y se rellena con movimiento, sin reflow.
+*/
+:root {
+  --board: #0a2622;
+  --board-2: #0e302a;
+  --panel: #103a32;
+  --chalk: #eaf3ef;
+  --chalk-dim: #7fa79b;
+  --line: #225349;
+  --amber: #ffb13b;
+  --lime: #7ee081;
+  --red: #ff7a7a;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+body {
+  margin: 0;
+  font-family: "Sora", sans-serif;
+  background: var(--board);
+  color: var(--chalk);
+  min-height: 100vh;
+  -webkit-font-smoothing: antialiased;
+  background-image:
+    radial-gradient(900px 500px at 50% -20%, rgba(126, 224, 129, 0.07), transparent 60%),
+    repeating-linear-gradient(90deg, transparent 0 59px, rgba(255, 255, 255, 0.018) 59px 60px);
+}
+
+.mono {
+  font-family: "DM Mono", monospace;
+  font-variant-numeric: tabular-nums;
+}
+
+.wrap {
+  max-width: 1160px;
+  margin: 0 auto;
+  padding: 26px 26px 60px;
+}
+
+/* ---------- header ---------- */
+.hdr {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 16px;
+  border-bottom: 1px dashed var(--line);
+  padding-bottom: 18px;
+}
+.brand {
+  display: flex;
+  align-items: center;
+  gap: 13px;
+}
+.ball {
+  width: 38px;
+  height: 38px;
+  border-radius: 50%;
+  border: 2px solid var(--chalk);
+  position: relative;
+  flex: none;
+}
+.ball::before {
+  content: "";
+  position: absolute;
+  inset: 8px;
+  border-radius: 50%;
+  border: 1.5px solid var(--chalk-dim);
+}
+.brand h1 {
+  font-size: 1.35rem;
+  font-weight: 800;
+  letter-spacing: -0.01em;
+  margin: 0;
+}
+.brand .s {
+  font-size: 0.7rem;
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+  color: var(--chalk-dim);
+  margin-top: 2px;
+}
+.hdr-meta {
+  display: flex;
+  gap: 18px;
+  font-family: "DM Mono", monospace;
+  font-size: 0.78rem;
+}
+.hdr-meta .k {
+  color: var(--chalk-dim);
+  font-size: 0.6rem;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+}
+
+/* ---------- layout: dos columnas estables ---------- */
+.grid {
+  display: grid;
+  grid-template-columns: 0.92fr 1.08fr;
+  gap: 22px;
+  margin-top: 24px;
+  align-items: start;
+}
+@media (max-width: 920px) {
+  .grid {
+    grid-template-columns: 1fr;
+  }
+}
+.stack {
+  display: flex;
+  flex-direction: column;
+  gap: 18px;
+  min-width: 0;
+}
+.card {
+  background: var(--board-2);
+  border: 1px solid var(--line);
+  border-radius: 14px;
+  padding: 20px;
+}
+.card-t {
+  font-size: 0.7rem;
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+  color: var(--amber);
+  margin-bottom: 16px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+.card-t .hint {
+  color: var(--chalk-dim);
+  letter-spacing: 0.08em;
+}
+
+/* ---------- hero: cancha + veredicto (siempre presente) ---------- */
+.hero {
+  display: grid;
+  grid-template-columns: 1.25fr 1fr;
+  gap: 20px;
+  align-items: center;
+}
+@media (max-width: 540px) {
+  .hero {
+    grid-template-columns: 1fr;
+  }
+}
+.pitch {
+  width: 100%;
+  border-radius: 10px;
+  background: linear-gradient(160deg, #0f3a31, #0c2e28);
+  border: 1px solid var(--line);
+}
+.pitch.idle {
+  opacity: 0.7;
+}
+.verdict .pre {
+  font-size: 0.68rem;
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+  color: var(--chalk-dim);
+}
+.verdict .cls {
+  font-size: 2.7rem;
+  font-weight: 800;
+  line-height: 1;
+  color: var(--amber);
+  margin: 6px 0 2px;
+  letter-spacing: -0.01em;
+  text-transform: capitalize;
+}
+.verdict .cls.idle {
+  color: var(--chalk-dim);
+  font-size: 1.5rem;
+}
+.verdict .conf {
+  font-family: "DM Mono", monospace;
+  font-size: 1.05rem;
+  color: var(--lime);
+}
+.verdict .desc {
+  font-size: 0.8rem;
+  color: var(--chalk-dim);
+  margin-top: 12px;
+  line-height: 1.5;
+}
+.waiting {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  font-family: "DM Mono", monospace;
+  font-size: 0.72rem;
+  color: var(--chalk-dim);
+  margin-top: 10px;
+}
+.waiting .pulse {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: var(--amber);
+  animation: pulse 1.4s ease-in-out infinite;
+}
+
+/* ---------- example chips ---------- */
+.chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 7px;
+  margin-bottom: 18px;
+}
+.chip {
+  font-family: "DM Mono", monospace;
+  font-size: 0.72rem;
+  padding: 6px 12px;
+  border-radius: 8px;
+  border: 1px solid var(--line);
+  color: var(--chalk-dim);
+  background: var(--panel);
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+.chip:hover {
+  color: var(--chalk);
+  border-color: var(--chalk-dim);
+}
+.chip.active {
+  color: var(--board);
+  background: var(--amber);
+  border-color: var(--amber);
+  font-weight: 500;
+}
+
+/* ---------- form ---------- */
+.field {
+  margin-bottom: 14px;
+}
+.field label,
+.field-label {
+  display: block;
+  font-size: 0.64rem;
+  letter-spacing: 0.13em;
+  text-transform: uppercase;
+  color: var(--chalk-dim);
+  margin-bottom: 6px;
+}
+.row2 {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 12px;
+}
+.control {
+  width: 100%;
+  background: var(--panel);
+  border: 1px solid var(--line);
+  color: var(--chalk);
+  border-radius: 8px;
+  padding: 9px 11px;
+  font-family: "DM Mono", monospace;
+  font-size: 0.84rem;
+}
+.control:focus {
+  outline: none;
+  border-color: var(--amber);
+}
+.seg {
+  display: flex;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  overflow: hidden;
+}
+.seg button {
+  flex: 1;
+  background: var(--panel);
+  border: 0;
+  color: var(--chalk-dim);
+  padding: 9px 0;
+  font-family: "DM Mono", monospace;
+  font-size: 0.82rem;
+  cursor: pointer;
+  transition: background 0.15s ease;
+}
+.seg button.on {
+  background: rgba(255, 177, 59, 0.16);
+  color: var(--amber);
+}
+.seg button + button {
+  border-left: 1px solid var(--line);
+}
+.emb-note {
+  font-size: 0.75rem;
+  color: var(--chalk-dim);
+  border-left: 3px solid var(--lime);
+  padding: 6px 12px;
+  margin-bottom: 18px;
+}
+.emb-note b {
+  color: var(--chalk);
+  font-weight: 600;
+}
+.btn {
+  width: 100%;
+  margin-top: 6px;
+  padding: 13px;
+  border: 0;
+  border-radius: 9px;
+  background: var(--amber);
+  color: var(--board);
+  font-family: "Sora", sans-serif;
+  font-weight: 800;
+  font-size: 0.95rem;
+  cursor: pointer;
+  transition:
+    transform 0.12s ease,
+    opacity 0.15s ease,
+    box-shadow 0.15s ease;
+  box-shadow: 0 10px 26px -14px var(--amber);
+}
+.btn:hover:not(:disabled) {
+  transform: translateY(-1px);
+  box-shadow: 0 14px 30px -12px var(--amber);
+}
+.btn:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+}
+
+/* ---------- probability bars ---------- */
+.pbar {
+  margin-bottom: 10px;
+}
+.pbar .top {
+  display: flex;
+  justify-content: space-between;
+  margin-bottom: 5px;
+  font-size: 0.8rem;
+}
+.pbar.win .top {
+  color: var(--amber);
+  font-weight: 600;
+}
+.pbar .vl {
+  font-family: "DM Mono", monospace;
+  color: var(--chalk-dim);
+}
+.pbar.win .vl {
+  color: var(--amber);
+}
+.tr {
+  height: 8px;
+  background: var(--panel);
+  border-radius: 5px;
+  overflow: hidden;
+}
+.fl {
+  height: 100%;
+  background: linear-gradient(90deg, #3a8f6a, var(--lime));
+  border-radius: 5px;
+  transition: width 0.55s cubic-bezier(0.2, 0.7, 0.2, 1);
+}
+.fl.dim {
+  background: var(--line);
+}
+
+/* ---------- shap diverging ---------- */
+.shap {
+  display: grid;
+  grid-template-columns: 132px 1fr 56px;
+  align-items: center;
+  gap: 9px;
+  margin-bottom: 7px;
+}
+.shap .nm {
+  font-family: "DM Mono", monospace;
+  font-size: 0.71rem;
+  text-align: right;
+  color: var(--chalk);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.shap .nm.visual {
+  color: var(--lime);
+}
+.st {
+  position: relative;
+  height: 14px;
+}
+.st .ax {
+  position: absolute;
+  left: 50%;
+  top: 0;
+  bottom: 0;
+  width: 1px;
+  background: var(--line);
+}
+.sb {
+  position: absolute;
+  top: 2px;
+  height: 10px;
+  border-radius: 3px;
+  width: 0;
+  transition: width 0.55s cubic-bezier(0.2, 0.7, 0.2, 1);
+}
+.sb.pos {
+  left: 50%;
+  background: var(--lime);
+}
+.sb.neg {
+  right: 50%;
+  background: var(--red);
+}
+.shap .sv {
+  font-family: "DM Mono", monospace;
+  font-size: 0.7rem;
+  color: var(--chalk-dim);
+}
+.idle-hint {
+  font-size: 0.78rem;
+  color: var(--chalk-dim);
+  line-height: 1.5;
+}
+
+/* ---------- gradcam placeholder ---------- */
+.gradcam {
+  border: 1px dashed var(--line);
+  border-radius: 12px;
+  padding: 16px;
+  text-align: center;
+  background: rgba(255, 177, 59, 0.03);
+}
+.gradcam .b {
+  font-family: "DM Mono", monospace;
+  font-size: 0.62rem;
+  letter-spacing: 0.13em;
+  text-transform: uppercase;
+  color: var(--amber);
+}
+.gradcam .t {
+  font-weight: 600;
+  margin-top: 6px;
+}
+.gradcam .d {
+  font-size: 0.76rem;
+  color: var(--chalk-dim);
+  margin-top: 3px;
+}
+
+.banner {
+  border: 1px solid var(--red);
+  background: rgba(255, 122, 122, 0.08);
+  color: var(--red);
+  border-radius: 10px;
+  padding: 12px 16px;
+  font-size: 0.82rem;
+}
+
+.foot {
+  margin-top: 28px;
+  text-align: center;
+  font-size: 0.7rem;
+  color: var(--chalk-dim);
+  letter-spacing: 0.08em;
+}
+
+/* ---------- movimiento ---------- */
+@keyframes rise {
+  from {
+    opacity: 0;
+    transform: translateY(10px);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+@keyframes pulse {
+  0%,
+  100% {
+    opacity: 0.35;
+    transform: scale(0.85);
+  }
+  50% {
+    opacity: 1;
+    transform: scale(1);
+  }
+}
+.reveal {
+  animation: rise 0.45s cubic-bezier(0.2, 0.7, 0.2, 1) both;
+}
+@media (prefers-reduced-motion: reduce) {
+  .reveal,
+  .waiting .pulse {
+    animation: none;
+  }
+  .fl,
+  .sb {
+    transition: none;
+  }
+}

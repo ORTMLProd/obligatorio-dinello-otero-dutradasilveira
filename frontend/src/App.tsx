@@ -1,48 +1,115 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 
-type BackendStatus = 'loading' | 'ok' | 'error'
+import examplesData from './examples.json'
+import { PredictionPanel } from './components/PredictionPanel'
+import { WindowForm } from './components/WindowForm'
+import { getModelInfo, predict } from './lib/api'
+import type { ExampleWindow, ModelInfo, PredictResponse, TabularFeatures } from './lib/types'
+
+const examples = examplesData as ExampleWindow[]
 
 function App() {
-  const [status, setStatus] = useState<BackendStatus>('loading')
-  const [version, setVersion] = useState<string | null>(null)
+  const [info, setInfo] = useState<ModelInfo | null>(null)
+  const [infoError, setInfoError] = useState(false)
+  const [selectedId, setSelectedId] = useState<string | null>(examples[0]?.id ?? null)
+  const [form, setForm] = useState<TabularFeatures>(examples[0]?.tabular)
+  const [embedding, setEmbedding] = useState<number[]>(examples[0]?.resnet_features ?? [])
+  const [result, setResult] = useState<PredictResponse | null>(null)
+  const [runId, setRunId] = useState(0)
+  const [loading, setLoading] = useState(false)
+  const [error, setError] = useState<string | null>(null)
 
   useEffect(() => {
-    // Relative path: works in dev (Vite proxy) and in prod (nginx reverse-proxy) alike.
-    fetch('/api/health')
-      .then((res) => {
-        if (!res.ok) throw new Error(`HTTP ${res.status}`)
-        return res.json()
-      })
-      .then((data: { status: string; version: string }) => {
-        setStatus(data.status === 'ok' ? 'ok' : 'error')
-        setVersion(data.version)
-      })
-      .catch(() => setStatus('error'))
+    getModelInfo()
+      .then(setInfo)
+      .catch(() => setInfoError(true))
   }, [])
 
-  const dotColor =
-    status === 'ok'
-      ? 'bg-emerald-500'
-      : status === 'error'
-        ? 'bg-red-500'
-        : 'bg-amber-400 animate-pulse'
+  const selectExample = (ex: ExampleWindow) => {
+    setSelectedId(ex.id)
+    setForm(ex.tabular)
+    setEmbedding(ex.resnet_features)
+    setResult(null)
+    setError(null)
+  }
+
+  const onPredict = async () => {
+    setLoading(true)
+    setError(null)
+    try {
+      const res = await predict({ ...form, resnet_features: embedding })
+      setResult(res)
+      setRunId((n) => n + 1)
+    } catch (e) {
+      setError(e instanceof Error ? e.message : 'Error al predecir')
+      setResult(null)
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  const f1 = info?.test_macro_f1
+  const status = useMemo(() => {
+    if (infoError || (info && !info.model_loaded)) return { color: 'var(--red)', text: 'sin modelo' }
+    if (info?.model_loaded) return { color: 'var(--lime)', text: 'en línea' }
+    return { color: 'var(--amber)', text: 'conectando…' }
+  }, [info, infoError])
 
   return (
-    <main className="flex min-h-screen flex-col items-center justify-center gap-6 bg-slate-950 text-slate-100">
-      <div className="text-center">
-        <h1 className="text-3xl font-bold tracking-tight">Clasificador de Eventos SoccerNet</h1>
-        <p className="mt-2 text-slate-400">ML en Producción — Obligatorio · Fase 0</p>
+    <div className="wrap">
+      <header className="hdr">
+        <div className="brand">
+          <div className="ball" />
+          <div>
+            <h1>SoccerNet · Eventos</h1>
+            <div className="s">Pizarra de clasificación</div>
+          </div>
+        </div>
+        <div className="hdr-meta">
+          <div>
+            <div className="k">Modelo</div>
+            {info?.version ?? '—'}
+          </div>
+          <div>
+            <div className="k">Macro-F1</div>
+            {f1 != null ? f1.toFixed(3) : '—'}
+          </div>
+          <div>
+            <div className="k">Estado</div>
+            <span style={{ color: status.color }}>● {status.text}</span>
+          </div>
+        </div>
+      </header>
+
+      {error && (
+        <div className="banner" style={{ marginTop: 18 }}>
+          No se pudo predecir — {error}
+        </div>
+      )}
+
+      <div className="grid">
+        <WindowForm
+          examples={examples}
+          selectedId={selectedId}
+          form={form}
+          loading={loading}
+          onSelectExample={selectExample}
+          onChange={(patch) => setForm((prev) => ({ ...prev, ...patch }))}
+          onPredict={onPredict}
+        />
+        <PredictionPanel
+          result={result}
+          loading={loading}
+          classes={info?.classes ?? null}
+          runId={runId}
+        />
       </div>
 
-      <div className="flex items-center gap-3 rounded-xl border border-slate-800 bg-slate-900 px-5 py-3">
-        <span className={`inline-block h-3 w-3 rounded-full ${dotColor}`} aria-hidden />
-        <span className="text-sm">
-          {status === 'loading' && 'Conectando con el backend…'}
-          {status === 'ok' && `Backend conectado ✓${version ? ` (v${version})` : ''}`}
-          {status === 'error' && 'Sin conexión con el backend'}
-        </span>
+      <div className="foot">
+        ML en Producción · Obligatorio · Fase 3 · la predicción usa el embedding ResNet
+        pre-extraído (sin video, por NDA)
       </div>
-    </main>
+    </div>
   )
 }
 
