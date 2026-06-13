@@ -54,6 +54,17 @@ class PathsConfig(BaseModel):
         return REPO_ROOT / getattr(self, name)
 
 
+class ClipsConfig(BaseModel):
+    """Clip dataset spec (Fase 3.5): K frames por ventana extraídos de los videos 224p."""
+
+    model_config = ConfigDict(extra="forbid")
+    enabled: bool = False
+    k: int = Field(default=8, gt=0)
+    clip_seconds: float = Field(default=8.0, gt=0)
+    frame_size: int = Field(default=224, gt=0)
+    video_files: list[str] = Field(default_factory=lambda: ["1_224p.mkv", "2_224p.mkv"])
+
+
 class DatasetConfig(BaseModel):
     """Full validated view of ``configs/dataset.yaml``."""
 
@@ -69,6 +80,7 @@ class DatasetConfig(BaseModel):
     features: FeaturesConfig
     split: SplitConfig
     paths: PathsConfig
+    clips: ClipsConfig = Field(default_factory=ClipsConfig)
 
     @classmethod
     def from_yaml(cls, path: Path | str) -> DatasetConfig:
