@@ -2,10 +2,18 @@
 
 from __future__ import annotations
 
-# Pre-load XGBoost's native C extension before any test module (including
-# test_clip_model) imports torch. On macOS ARM, torch initialises Metal/MPS
-# dispatch queues; if XGBoost's OpenMP (libomp) then loads into the same process
-# it segfaults. Loading XGBoost first avoids the clash.
+import os
+
+# torch and xgboost each bundle their own OpenMP runtime (libomp). On macOS ARM,
+# running a torch CPU conv (the ResNet18 forward in test_clip_model) in the same
+# process as xgboost segfaults: the two OpenMP runtimes clash. Forcing a single
+# OpenMP thread before either native lib loads avoids it. Must run before the imports
+# below. The standalone training script does not load this conftest, so real training
+# keeps full threading.
+os.environ.setdefault("OMP_NUM_THREADS", "1")
+
+# Pre-load XGBoost's native extension before any test module imports torch, so the
+# load order is deterministic alongside the single-thread setting above.
 try:
     import xgboost as _xgb  # noqa: F401  (import for side-effect only)
 except ImportError:
