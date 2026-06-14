@@ -711,3 +711,72 @@ Sub-proyecto desarrollado con Claude Code: brainstorming del alcance, spec y pla
 TDD vía subagentes con review automatizado, y orquestación de la corrida real (descarga NDA →
 clips). El estudiante definió la visión (video en el flujo, 16 partidos), aportó la password del
 NDA y revisó/validó cada decisión; es responsable de poder defenderla.
+
+---
+
+## 2026-06-14 — Fase 3.5, sub-proyecto 2: Modelo (CNN multi-frame de clips)
+
+### Qué se hizo
+- Se entrenó el **clasificador multi-frame visual-only**: ResNet18 ImageNet **congelada** (forward
+  en vivo, sin gradientes) → embedding 512-dim por frame → **mean-pool** de los 8 frames → cabeza
+  MLP (512→256→5). Solo entrena la cabeza. PyTorch + torchvision en MPS (Apple Silicon).
+- **Componentes (TDD, subagentes):** `clip_model.py` (modelo + transforms anti-skew + device),
+  `clips_dataset.py` (Dataset que lee los frames del manifest), `clip_export.py` (bundle = head
+  state_dict + meta + transforms de eval; `predict_clip` como fuente única de inferencia),
+  `train_clips.py` (fit/evaluate + orquestación), `train_clips.yaml` + config tipada. 82 tests.
+- **Augmentation con impacto medido:** se entrenó sin y con augmentation (flip/crop/color). Resultado
+  sobre test: no-aug macro-F1 **0.596** → aug **0.640** (**Δ = +0.045**). Cierra otra sub-técnica del
+  electivo de optimización, medida. El bundle exportado es el augmentado (`clips-v1-clips-aug`).
+- Todo a MLflow (experimento `clips-cnn-v1`, runs `clips-noaug`/`clips-aug`): params, métricas por
+  clase + macro-F1, matriz de confusión. Bundle `clip_model.pt` (533 KB) gitignored.
+
+### Hallazgo (insumo clave para el informe)
+- El macro-F1 visual (~0.64) es **menor que el del modelo de ventana tabular (~0.80)** — y eso es
+  **esperado y honesto**: el CNN aprende de los píxeles, sin los **atajos de construcción** del
+  dataset (ej. `team_is_home=-1`/`visible=0` en background) que inflaban al tabular (ver SHAP de
+  3.2). El modelo visual hace trabajo real; es el que sirve para clips subidos.
+
+### Por qué se hizo así / concepto del curso
+- **Transfer learning con backbone congelado:** reusar ResNet18 ImageNet como extractor fijo y
+  entrenar solo la cabeza → rápido, robusto al overfitting con dataset chico, entrenable local.
+- **Anti training-serving skew (invariante 3):** los transforms de eval se serializan en el bundle;
+  `predict_clip` es el único camino de inferencia (lo reusará el serving del sub-proyecto 4).
+- **Desbalance (invariante 5):** cross-entropy ponderada por la distribución del train; métricas por
+  clase + macro-F1, nunca accuracy.
+- **Determinismo (invariante 6):** seed de torch/numpy/random; selección por val, test una vez.
+- **Optimización (electivo):** augmentation como sub-técnica, con impacto medido (Δ macro-F1).
+
+### Requerimiento de la consigna que cubre
+- Núcleo del modelo que habilita la integración de video (técnica avanzada) y la base del Grad-CAM
+  (sub-proyecto 3). Suma una sub-técnica de optimización medida.
+
+### Alternativas consideradas y descartadas
+- **Fine-tune del backbone / cachear embeddings** → se eligió congelado + en vivo (permite
+  augmentation); fine-tune queda como mejora futura medible.
+- **Fusión con tabular** → descartada: el flujo de upload es visual-only y lo tabular tiene artefactos.
+- **Colab / GPU en la nube** → descartado por **NDA** (subir frames = divulgar a un tercero,
+  cláusula 3.c / Exhibit A "do not distribute to tiers"); se entrena local en MPS.
+
+### Limitaciones asumidas
+- Dataset chico (762 train) y clases minoritarias (goal/card) → métricas por clase ruidosas.
+- Desfase temporal train(8s)/serve(hasta 30s): se resuelve muestreando K frames; a evaluar con el
+  serving real.
+
+### Nota técnica (entorno)
+- En Apple Silicon, torch y xgboost traen cada uno su OpenMP (libomp): correr el forward de la
+  ResNet en el mismo proceso pytest que xgboost segfaultea. Resuelto con `OMP_NUM_THREADS=1` en
+  `conftest.py` (el script de entrenamiento real no se ve afectado y mantiene full threading).
+
+### Referencias al código
+- `backend/src/models/{clip_model,clip_export,train_clips,clip_config}.py`,
+  `backend/src/data/clips_dataset.py`, `configs/train_clips.yaml`.
+- Tests: `backend/tests/test_{clip_model,clips_dataset,clip_export,train_clips,clip_config}.py`.
+- Spec: `docs/superpowers/specs/2026-06-14-cnn-clips-modelo-design.md`.
+  Plan: `docs/superpowers/plans/2026-06-14-cnn-clips-modelo.md`.
+- Comando: `uv run python -m src.models.train_clips --config ../configs/train_clips.yaml`.
+
+### Uso de IA generativa
+Sub-proyecto desarrollado con Claude Code: brainstorming (backbone, augmentation, visual-only),
+spec y plan, implementación TDD vía subagentes con review, diagnóstico del clash OpenMP, y
+orquestación del entrenamiento real local. El estudiante decidió la dirección (visual-only,
+augmentation con medición, no-Colab por NDA) y validó cada paso; es responsable de poder defenderlo.
