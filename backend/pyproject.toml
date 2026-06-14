@@ -48,6 +48,12 @@ ml = [
     "mlflow>=2.16",
     "optuna>=4.0",
 ]
+# CNN multi-frame de clips (Fase 3.5). Solo en training; el serving (sub-proyecto 4)
+# las moverá/sumará a prod. torch trae soporte MPS en Apple Silicon.
+cnn = [
+    "torch>=2.4",
+    "torchvision>=0.19",
+]
 
 # This is an application, not an installable library: uv installs the dependencies
 # but does not build/install the project itself.
