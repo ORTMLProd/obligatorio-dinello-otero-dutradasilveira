@@ -14,7 +14,7 @@ seed: 42
 # Subconjunto chico para cerrar el ciclo end-to-end. Escalar a 30-50 cambiando
 # solo `num_games`. `source_split` indica de qué split de SoccerNet tomamos la
 # lista de partidos; NO es nuestro split (re-particionamos por game_id, ver abajo).
-num_games: 8
+num_games: 16
 source_split: train
 game_ids: [] # si se completa, pisa num_games (lista explícita de partidos)
 
@@ -56,3 +56,12 @@ paths:
   processed_dir: "data/processed"
   splits_file: "configs/splits.yaml"
   summary_file: "report/dataset_summary.json"
+
+# Dataset de clips (Fase 3.5): K frames por ventana extraídos de los videos 224p.
+# Requiere SOCCERNET_PASSWORD para descargar videos (política NDA).
+clips:
+  enabled: true
+  k: 8 # frames por clip
+  clip_seconds: 8 # ventana temporal del clip (±4s alrededor del evento)
+  frame_size: 224 # lado del frame (cuadrado), apto para ResNet
+  video_files: ["1_224p.mkv", "2_224p.mkv"] # un video por mitad

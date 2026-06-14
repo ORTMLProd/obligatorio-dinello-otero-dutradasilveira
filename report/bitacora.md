@@ -646,3 +646,68 @@ Revisado por el estudiante.
 Bloque desarrollado con asistencia de Claude Code (diseño, código y tests con TDD, configuración
 del stack y verificación end-to-end con Docker/Playwright, redacción de esta entrada). El
 estudiante revisó y validó cada decisión y es responsable de poder defenderla.
+
+---
+
+## 2026-06-13/14 — Fase 3.5, sub-proyecto 1: Datos (clips de video)
+
+### Qué se hizo
+- Arranca la Fase 3.5 (integrar video en el flujo). Visión: subir un clip de ~30s → el modelo
+  predice una clase. Modelo objetivo: **clip nativo multi-frame** (K frames → CNN compartida →
+  pooling → cabeza), solo-visual (un clip subido no tiene contexto tabular del partido). Se
+  descompuso en 5 sub-proyectos (Datos, Modelo, Grad-CAM, Serving, Frontend); este es el (1).
+- **Proceso disciplinado:** brainstorming → spec (`docs/superpowers/specs/`) → plan
+  (`docs/superpowers/plans/`) → implementación TDD con subagentes → review → corrida real.
+- **Código (TDD):** `src/data/frames.py` (extracción de K frames equiespaciados con OpenCV,
+  *seek* por timestamp), `src/data/build_clips.py` (builder del `clips_manifest.parquet`,
+  reusa windows/labels/splits/tabular), extensión de `download.py` (videos 224p con password
+  NDA del entorno), `ClipsConfig` en `dataset.yaml`. Tests con video sintético + test de
+  leakage por `game_id`. Un fix de review: error claro si no hay clips (videos sin descargar).
+- **Corrida real:** descargados labels+features+**videos** de **16 partidos** (~6.2 GB, NDA);
+  splits regenerados (10/3/3); **1140 clips** de 8 frames construidos. Escalar a 16 mejoró las
+  minoritarias: `goal` 11→45, `card` 22→64. Dataset ResNet de ventana reconstruido para 16
+  (consistencia de splits).
+- Hallazgo honesto: al retunear el modelo de ventana sobre 16, el tuneado (optimizado en val)
+  **no le ganó al baseline en test** (0.780 vs 0.797). Esperable: tunear sobre validación no
+  garantiza mejora en test con otro split y clases chicas. Ambas corridas quedan en MLflow.
+
+### Por qué se hizo así / concepto del curso
+- **Por qué un extractor propio:** las features ResNet+PCA pre-extraídas no se reproducen desde
+  un video arbitrario; para servir clips subidos hace falta una CNN propia sobre frames →
+  requiere frames reales → videos (NDA). Evita training-serving skew en lo visual.
+- **Splits por `game_id`** (invariante 1, anti-leakage): los clips de un partido nunca cruzan
+  train/val/test; cubierto por test.
+- **Gobernanza de datos / NDA:** videos y frames nunca al repo (gitignored); password desde
+  `SOCCERNET_PASSWORD` (env, vía `.env`), nunca impresa ni logueada. Solo se versionan código,
+  config, splits y summaries (con hash de contenido para trazabilidad).
+- **Reproducibilidad:** pipeline config-driven, idempotente y seedeado; el dataset se regenera
+  con la password propia de cada quien.
+
+### Requerimiento de la consigna que cubre
+- Cimiento del electivo **Explicabilidad visual (Grad-CAM)** y de la integración de video
+  (técnica avanzada). Habilita los sub-proyectos 2–5.
+
+### Alternativas consideradas y descartadas
+- **Clasificar 1 frame representativo / agregación al servir** → se eligió clip nativo
+  multi-frame (más fiel a "el video es un gol").
+- **ffmpeg de sistema / decord** → OpenCV (`opencv-python`, sin dep de sistema, robusto en arm64).
+- **8 partidos** → 16 (el disco sobraba; mejora minoritarias). Escalable por config.
+- **Endpoint `/examples` para el baseline de datos** → no aplica acá.
+
+### Limitaciones asumidas
+- Desfase temporal train/serve (clips de 8s vs uploads de hasta 30s): se resuelve muestreando K
+  frames; a evaluar en el sub-proyecto 2.
+- Clases minoritarias siguen chicas en test (goal/card pocas decenas).
+
+### Referencias al código
+- `backend/src/data/{frames,build_clips,download,config}.py`, `configs/dataset.yaml`.
+- Tests: `backend/tests/test_{frames,build_clips,download,data_config}.py`.
+- Spec: `docs/superpowers/specs/2026-06-13-cnn-clips-datos-design.md`.
+  Plan: `docs/superpowers/plans/2026-06-13-cnn-clips-datos.md`.
+- Comandos: `download` → `splits` → `build_clips` (requieren `SOCCERNET_PASSWORD`).
+
+### Uso de IA generativa
+Sub-proyecto desarrollado con Claude Code: brainstorming del alcance, spec y plan, implementación
+TDD vía subagentes con review automatizado, y orquestación de la corrida real (descarga NDA →
+clips). El estudiante definió la visión (video en el flujo, 16 partidos), aportó la password del
+NDA y revisó/validó cada decisión; es responsable de poder defenderla.

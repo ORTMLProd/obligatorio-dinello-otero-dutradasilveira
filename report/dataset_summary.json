@@ -1,42 +1,42 @@
 {
   "seed": 42,
-  "n_games": 8,
-  "n_windows": 615,
+  "n_games": 16,
+  "n_windows": 1140,
   "feature_dim": 512,
   "class_counts": {
-    "corner": 104,
-    "goal": 23,
-    "card": 33,
-    "substitution": 45,
-    "background": 410
+    "corner": 185,
+    "goal": 45,
+    "card": 64,
+    "substitution": 86,
+    "background": 760
   },
   "split_counts": {
-    "val": 147,
-    "test": 72,
-    "train": 396
+    "test": 186,
+    "train": 762,
+    "val": 192
   },
   "split_class_counts": {
     "test": {
-      "goal": 3,
-      "corner": 11,
-      "card": 4,
-      "substitution": 6,
-      "background": 48
+      "corner": 28,
+      "goal": 6,
+      "card": 13,
+      "substitution": 15,
+      "background": 124
     },
     "train": {
-      "corner": 65,
-      "goal": 15,
-      "card": 23,
-      "substitution": 29,
-      "background": 264
+      "goal": 33,
+      "corner": 131,
+      "card": 35,
+      "substitution": 55,
+      "background": 508
     },
     "val": {
-      "corner": 28,
-      "goal": 5,
-      "card": 6,
-      "substitution": 10,
-      "background": 98
+      "corner": 26,
+      "card": 16,
+      "goal": 6,
+      "substitution": 16,
+      "background": 128
     }
   },
-  "content_sha256": "ad10e394cbf50e7aaa1a7fbe06934744d1bd15ece8d823d4f14aadba676adde0"
+  "content_sha256": "44a977f90d1ad81755e66dc962870a304173d2c77dbf4b173de3092f8ccff16f"
 }

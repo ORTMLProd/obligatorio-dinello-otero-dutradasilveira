@@ -38,6 +38,8 @@ dev = [
 # SoccerNet pulls heavy transitive deps not needed at serving time.
 data = [
     "SoccerNet>=0.1.60",
+    # Extracción de frames de los videos para el dataset de clips (Fase 3.5).
+    "opencv-python>=4.10",
 ]
 # Experiment tracking + hyperparameter optimisation. Only needed at training time
 # (logging runs + model registry, Optuna search), never at serving: the API loads the
