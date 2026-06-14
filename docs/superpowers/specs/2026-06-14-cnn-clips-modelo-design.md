@@ -134,3 +134,15 @@ report/metrics/confusion_clips.png + MLflow runs
   igual con la salvedad documentada.
 - **Determinismo en MPS:** seedear torch/numpy/random; algunas ops MPS no son 100% deterministas —
   se loguea el seed y se asume tolerancia.
+
+## Cómputo y NDA (decisión de gobernanza)
+
+Entrenamiento **local en MPS**. **No** se usa Colab ni GPU en la nube con los frames: subirlos
+sería divulgar Confidential Information a un tercero (Google), no permitido por el NDA con KAUST —
+cláusula 3.c (no divulgar a terceros salvo subcontratistas obligados a protegerla o autorización
+escrita del Disclosing Party) y Exhibit A ("do not distribute to tiers"); los frames son copias de
+la información confidencial (cláusula 6, "including all copies thereof"). El diseño con backbone
+**congelado** se eligió, en parte, para que entrenar sea viable localmente y evitar esta tensión.
+Si en el futuro se necesitara GPU en la nube (p. ej. fine-tuning del backbone), requeriría
+**autorización escrita de KAUST** o un proveedor obligado contractualmente — decisión a tomar
+explícitamente, no por defecto.
