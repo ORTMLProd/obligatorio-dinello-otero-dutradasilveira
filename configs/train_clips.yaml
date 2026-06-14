@@ -1,0 +1,34 @@
+# Entrenamiento del clasificador multi-frame de clips (Fase 3.5, visual-only).
+seed: 42
+backbone: resnet18
+pooling: mean # mean | max
+k: 8 # frames por clip (debe coincidir con el dataset de clips)
+frame_size: 224
+
+head:
+  hidden: 256
+  dropout: 0.3
+
+train:
+  epochs: 25
+  patience: 5 # early stopping sobre macro-F1 de validación
+  lr: 0.001
+  batch_size: 16
+
+# Se entrena sin y con augmentation para medir el impacto (electivo de optimización).
+augment: true
+
+# Normalización ImageNet (el backbone es pre-entrenado). Se serializa con el bundle.
+normalize:
+  mean: [0.485, 0.456, 0.406]
+  std: [0.229, 0.224, 0.225]
+
+mlflow:
+  tracking_uri: ${MLFLOW_TRACKING_URI:-sqlite:///mlflow.db}
+  experiment_name: clips-cnn-v1
+
+paths:
+  model_dir: "models/clips-v1"
+  metrics_dir: "report/metrics"
+  manifest: "data/processed/clips_manifest.parquet"
+  processed_dir: "data/processed"
