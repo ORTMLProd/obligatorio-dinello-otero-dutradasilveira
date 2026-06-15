@@ -66,3 +66,21 @@ def gradcam_clip(model, clip: torch.Tensor, class_index: int | None = None):
         heatmaps[i] = (cam[i] - lo) / (hi - lo) if hi > lo else np.zeros_like(cam[i])
     model.zero_grad(set_to_none=True)
     return heatmaps, class_index
+
+
+def overlay_heatmap(frame_rgb: np.ndarray, heatmap: np.ndarray, alpha: float = 0.45) -> np.ndarray:
+    """Blend a [0, 1] ``heatmap`` (jet colormap) over an RGB frame. Returns uint8 RGB.
+
+    The heatmap is resized to the frame size if they differ. ``alpha`` is the heatmap weight.
+    """
+    import cv2  # local import: only the overlay utility needs OpenCV
+
+    height, width = frame_rgb.shape[:2]
+    hm = heatmap
+    if hm.shape[:2] != (height, width):
+        hm = cv2.resize(hm, (width, height))
+    hm_uint8 = np.uint8(255 * np.clip(hm, 0.0, 1.0))
+    colored_bgr = cv2.applyColorMap(hm_uint8, cv2.COLORMAP_JET)
+    colored_rgb = cv2.cvtColor(colored_bgr, cv2.COLOR_BGR2RGB)
+    blended = alpha * colored_rgb.astype(np.float32) + (1 - alpha) * frame_rgb.astype(np.float32)
+    return blended.clip(0, 255).astype(np.uint8)

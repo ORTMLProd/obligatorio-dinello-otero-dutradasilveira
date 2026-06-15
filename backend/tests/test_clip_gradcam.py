@@ -1,7 +1,7 @@
 import numpy as np
 import torch
 
-from src.models.clip_gradcam import gradcam_clip
+from src.models.clip_gradcam import gradcam_clip, overlay_heatmap
 from src.models.clip_model import build_clip_model
 
 
@@ -32,3 +32,17 @@ def test_backbone_stays_frozen_after_gradcam() -> None:
     model = build_clip_model(3, hidden=16, pretrained=False)
     gradcam_clip(model, torch.randn(1, 4, 3, 64, 64))
     assert all(not p.requires_grad for p in model.backbone.parameters())
+
+
+def test_overlay_returns_rgb_image() -> None:
+    frame = np.random.randint(0, 255, (64, 64, 3), dtype=np.uint8)
+    heatmap = np.random.rand(64, 64).astype(np.float32)
+    out = overlay_heatmap(frame, heatmap)
+    assert out.shape == (64, 64, 3) and out.dtype == np.uint8
+
+
+def test_overlay_resizes_mismatched_heatmap() -> None:
+    frame = np.random.randint(0, 255, (64, 64, 3), dtype=np.uint8)
+    heatmap = np.random.rand(7, 7).astype(np.float32)  # smaller than the frame
+    out = overlay_heatmap(frame, heatmap)
+    assert out.shape == (64, 64, 3)
