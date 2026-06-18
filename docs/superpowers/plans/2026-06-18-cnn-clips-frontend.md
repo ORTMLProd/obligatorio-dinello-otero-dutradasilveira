@@ -16,14 +16,14 @@
 
 ## Nota sobre verificación
 
-El frontend **no tiene runner de tests unitarios** (igual que en la Fase 3.3). Cada task se verifica
-con typecheck + lint:
+Cada task se verifica con typecheck + lint:
 - `cd frontend && npx tsc -b` (debe pasar sin errores).
 - `cd frontend && npm run lint` (eslint limpio).
 
-La verificación end-to-end (build + correr contra la API real con un video) es la Task 5.
-Convenciones: código/identificadores en inglés; textos de UI y commits en **español**; commits
-conventional, sin firma de Claude. NO commitear videos/frames.
+Se agrega **Vitest** (liviano para Vite) para unit-testear la **lógica pura** del front
+(ordenar probabilidades, confianza, clamp del Grad-CAM) — el rendering/integración se verifica
+end-to-end (Task 6). Convenciones: código/identificadores en inglés; textos de UI y commits en
+**español**; commits conventional, sin firma de Claude. NO commitear videos/frames.
 
 ---
 
@@ -31,10 +31,11 @@ conventional, sin firma de Claude. NO commitear videos/frames.
 
 - Modify: `frontend/src/lib/types.ts` — `GradcamFrame`, `ClipPredictResponse`.
 - Modify: `frontend/src/lib/api.ts` — `predictClip(file)`.
+- Create: `frontend/src/lib/format.ts` — helpers puros (`sortedByValueDesc`, `confidencePct`, `clampIndex`).
+- Create: `frontend/src/lib/format.test.ts` — tests (Vitest).
+- Modify: `frontend/package.json` — devDep `vitest` + script `test`.
 - Modify: `frontend/src/index.css` — clases del modo video (`.modes`, `.dropzone`, `.vid-file`, `.vid-note`, `.gc-main`, `.gc-strip`, `.gc-thumb`).
-- Create: `frontend/src/components/GradcamViewer.tsx`.
-- Create: `frontend/src/components/VideoForm.tsx`.
-- Create: `frontend/src/components/ClipPrediction.tsx`.
+- Create: `frontend/src/components/GradcamViewer.tsx`, `VideoForm.tsx`, `ClipPrediction.tsx`.
 - Modify: `frontend/src/App.tsx` — toggle de modo + flujo video.
 
 ---
@@ -97,7 +98,102 @@ git commit -m "feat: tipos y cliente predictClip (POST /predict/clip)"
 
 ---
 
-## Task 2: CSS del modo video
+## Task 2: Vitest + helpers puros (`lib/format.ts`)
+
+**Files:**
+- Modify: `frontend/package.json`
+- Create: `frontend/src/lib/format.ts`
+- Create: `frontend/src/lib/format.test.ts`
+
+- [ ] **Step 1: Add Vitest + a `test` script**
+
+In `frontend/package.json`, add `"vitest": "^2.1.0"` to `devDependencies`, and add to `scripts`:
+```json
+    "test": "vitest run",
+```
+Then: `cd frontend && npm install`. (Vitest auto-detecta `vite.config.ts`; no hace falta config extra.)
+
+- [ ] **Step 2: Write the failing tests**
+
+Create `frontend/src/lib/format.test.ts`:
+
+```ts
+import { describe, expect, it } from 'vitest'
+
+import { clampIndex, confidencePct, sortedByValueDesc } from './format'
+
+describe('sortedByValueDesc', () => {
+  it('orders entries by value descending', () => {
+    expect(sortedByValueDesc({ a: 0.1, b: 0.7, c: 0.2 })).toEqual([
+      ['b', 0.7],
+      ['c', 0.2],
+      ['a', 0.1],
+    ])
+  })
+})
+
+describe('confidencePct', () => {
+  it('rounds the label probability to a percentage', () => {
+    expect(confidencePct({ corner: 0.713, goal: 0.287 }, 'corner')).toBe(71)
+  })
+  it('returns 0 for a missing label', () => {
+    expect(confidencePct({ corner: 0.7 }, 'goal')).toBe(0)
+  })
+})
+
+describe('clampIndex', () => {
+  it('clamps to [0, length-1] and handles empty', () => {
+    expect(clampIndex(5, 3)).toBe(2)
+    expect(clampIndex(-1, 3)).toBe(0)
+    expect(clampIndex(1, 3)).toBe(1)
+    expect(clampIndex(2, 0)).toBe(0)
+  })
+})
+```
+
+- [ ] **Step 3: Run, confirm FAIL**
+
+Run: `cd frontend && npm test`
+Expected: FAIL (no existe `./format`).
+
+- [ ] **Step 4: Implement `frontend/src/lib/format.ts`**
+
+```ts
+// Pure UI helpers, unit-tested with Vitest. Kept out of components so they can be
+// reasoned about and tested in isolation.
+
+/** Entries of a probability map, sorted by value descending. */
+export function sortedByValueDesc(probabilities: Record<string, number>): [string, number][] {
+  return Object.entries(probabilities).sort((a, b) => b[1] - a[1])
+}
+
+/** The label's probability as a rounded percentage (0 if the label is absent). */
+export function confidencePct(probabilities: Record<string, number>, label: string): number {
+  return Math.round((probabilities[label] ?? 0) * 100)
+}
+
+/** Clamp ``index`` to ``[0, length - 1]`` (0 when ``length`` is 0). */
+export function clampIndex(index: number, length: number): number {
+  if (length <= 0) return 0
+  return Math.min(Math.max(index, 0), length - 1)
+}
+```
+
+- [ ] **Step 5: Run, confirm PASS + typecheck + lint**
+
+Run: `cd frontend && npm test && npx tsc -b && npm run lint`
+Expected: tests verdes, sin errores de tipos ni lint.
+
+- [ ] **Step 6: Commit**
+
+```bash
+git add frontend/package.json frontend/package-lock.json frontend/src/lib/format.ts frontend/src/lib/format.test.ts
+git commit -m "test: vitest + helpers puros de formato (probabilidades, confianza, clamp)"
+```
+
+---
+
+## Task 3: CSS del modo video
 
 **Files:**
 - Modify: `frontend/src/index.css`
@@ -253,7 +349,7 @@ git commit -m "style: clases del modo video (toggle, dropzone, grad-cam)"
 
 ---
 
-## Task 3: Componentes GradcamViewer, VideoForm, ClipPrediction
+## Task 4: Componentes GradcamViewer, VideoForm, ClipPrediction
 
 **Files:**
 - Create: `frontend/src/components/GradcamViewer.tsx`
@@ -265,6 +361,7 @@ git commit -m "style: clases del modo video (toggle, dropzone, grad-cam)"
 ```tsx
 import { useState } from 'react'
 
+import { clampIndex } from '../lib/format'
 import type { GradcamFrame } from '../lib/types'
 
 const src = (f: GradcamFrame) => `data:image/jpeg;base64,${f.image_base64}`
@@ -272,7 +369,7 @@ const src = (f: GradcamFrame) => `data:image/jpeg;base64,${f.image_base64}`
 export function GradcamViewer({ frames, label }: { frames: GradcamFrame[]; label: string }) {
   const [selected, setSelected] = useState(0)
   if (frames.length === 0) return null
-  const index = Math.min(selected, frames.length - 1)
+  const index = clampIndex(selected, frames.length)
   const sel = frames[index]
 
   return (
@@ -357,6 +454,7 @@ export function VideoForm({ file, loading, onSelect, onAnalyze }: Props) {
 - [ ] **Step 3: Create `ClipPrediction.tsx`**
 
 ```tsx
+import { confidencePct, sortedByValueDesc } from '../lib/format'
 import type { ClipPredictResponse } from '../lib/types'
 import { GradcamViewer } from './GradcamViewer'
 
@@ -370,9 +468,9 @@ export function ClipPrediction({
   loading: boolean
 }) {
   const probEntries = result
-    ? Object.entries(result.probabilities).sort((a, b) => b[1] - a[1])
+    ? sortedByValueDesc(result.probabilities)
     : DEFAULT_CLASSES.map((c) => [c, 0] as [string, number])
-  const conf = result ? Math.round((result.probabilities[result.predicted_label] ?? 0) * 100) : 0
+  const conf = result ? confidencePct(result.probabilities, result.predicted_label) : 0
 
   return (
     <div className="stack">
@@ -431,10 +529,10 @@ export function ClipPrediction({
 }
 ```
 
-- [ ] **Step 4: Verify typecheck + lint**
+- [ ] **Step 4: Verify typecheck + lint + tests**
 
-Run: `cd frontend && npx tsc -b && npm run lint`
-Expected: sin errores.
+Run: `cd frontend && npx tsc -b && npm run lint && npm test`
+Expected: sin errores; los tests de `format` siguen verdes.
 
 - [ ] **Step 5: Commit**
 
@@ -445,7 +543,7 @@ git commit -m "feat: componentes del modo video (GradcamViewer, VideoForm, ClipP
 
 ---
 
-## Task 4: Toggle de modo + flujo video en `App.tsx`
+## Task 5: Toggle de modo + flujo video en `App.tsx`
 
 **Files:**
 - Modify: `frontend/src/App.tsx`
@@ -650,7 +748,7 @@ git commit -m "feat: toggle Ventana|Video y flujo de analisis de video en App"
 
 ---
 
-## Task 5: Verificación end-to-end (frontend + API real)
+## Task 6: Verificación end-to-end (frontend + API real)
 
 > Verifica el modo video contra la API real con el clip-model cargado. No es test automatizado.
 
@@ -682,10 +780,10 @@ lsof -ti tcp:5173 tcp:8000 | xargs -r kill
 
 ## Self-Review (hecho)
 
-- **Cobertura del spec:** tipos + `predictClip` (Task 1), CSS del modo video (Task 2), componentes
-  GradcamViewer/VideoForm/ClipPrediction (Task 3), toggle + flujo en App (Task 4), verificación
-  end-to-end (Task 5). Sin SHAP/cancha en video; `model_version` del clip en el panel; header con
-  el modelo de ventana como estado general. ✓
+- **Cobertura del spec:** tipos + `predictClip` (Task 1), Vitest + helpers puros (Task 2), CSS del
+  modo video (Task 3), componentes GradcamViewer/VideoForm/ClipPrediction usando los helpers
+  (Task 4), toggle + flujo en App (Task 5), verificación end-to-end (Task 6). Sin SHAP/cancha en
+  video; `model_version` del clip en el panel; header con el modelo de ventana como estado general. ✓
 - **Placeholders:** ninguno; código real (componentes completos). ✓
 - **Consistencia de tipos:** `ClipPredictResponse{predicted_label,probabilities,model_version,gradcam:[GradcamFrame{frame_index,image_base64}]}`, `predictClip(file)`, props de `VideoForm`/`ClipPrediction`/`GradcamViewer`. Consistentes entre tasks. ✓
 - **NDA:** no se commitean videos; tests/verificación con video propio/sintético. ✓
