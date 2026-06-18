@@ -828,3 +828,63 @@ augmentation con medición, no-Colab por NDA) y validó cada paso; es responsabl
 ### Uso de IA generativa
 Desarrollado con Claude Code (brainstorming, spec, plan, implementación TDD vía subagentes,
 validación numérica NDA-safe). Revisado por el estudiante.
+
+---
+
+## 2026-06-18 — Fase 3.5, sub-proyecto 4: Serving (upload de video)
+
+### Qué se hizo
+- **El que conecta el video con el flujo:** endpoint `POST /predict/clip` que recibe un **video**,
+  extrae frames, corre el clip-model + Grad-CAM y devuelve clase + probabilidades + overlays.
+- Flujo (`src/serving/clip_inference.py`, TDD): `frames_from_video` (guarda el upload en un temp,
+  reusa `extract_clip_frames` para muestrear 8 frames a lo largo del clip, **borra el temp** — no
+  se persisten imágenes) → `predict_clip` → `gradcam_clip` → `overlay_heatmap` → JPGs en **base64**.
+- Endpoint (`src/api/routers/clip_predict.py`) con schema `ClipPredictResponse` (clase,
+  probabilidades, versión, `gradcam: [{frame_index, image_base64}]`); 503 si no hay clip-model.
+- El clip-bundle se carga en el `lifespan` (best-effort); `clip_model_dir` por config/env.
+- **Deps de prod:** `torch`/`torchvision`/`opencv-python-headless` pasan a `[project]`. Dockerfile:
+  pre-cachea los pesos ResNet18 y setea `OMP_NUM_THREADS=1`.
+- **Verificado en el stack docker real:** `docker compose up --build` → POST de un video →
+  **clase + 8 overlays Grad-CAM**; y `/predict` (xgboost) sigue vivo → **torch y xgboost coexisten
+  en el mismo proceso sin crash** (confirma el `OMP_NUM_THREADS=1` en runtime). 94 tests verdes.
+
+### Concepto del curso relacionado
+- **Serving de modelos / contrato de API:** endpoint multipart, schema estricto, 503 sin modelo.
+- **Anti training-serving skew (invariante 3):** la extracción de frames y el transform de eval en
+  serving son **los mismos** que en training (se reusan las funciones).
+- **Gobernanza de datos / NDA:** el video lo sube el usuario; los frames se procesan en memoria y el
+  temp se borra (no se persisten imágenes); la validación fue con video sintético / sin mostrar
+  frames reales a terceros.
+- **MLOps / contenedores:** imagen con torch (pesada, asumida para la demo), pesos pre-cacheados en
+  el build (serving offline), y el manejo del conflicto de runtimes OpenMP.
+
+### Requerimiento de la consigna que cubre
+- Integración de **video en el flujo** (técnica avanzada / objetivo central de la Fase 3.5):
+  subir un clip → predicción + explicación visual, servido por la API.
+
+### Alternativas / decisiones
+- **Misma imagen API + torch vs servicio aparte** → misma imagen (más simple para la demo), con
+  `OMP_NUM_THREADS=1` para la coexistencia con xgboost.
+- **Pesos del backbone:** pre-descargados en el Dockerfile (bundle chico) vs empaquetar el modelo
+  completo → pre-descarga.
+- **Devolver los 8 overlays** vs solo el saliente → los 8 (el frontend elige; evita el problema de
+  "frame saliente" con la normalización por-frame).
+
+### Problemas encontrados y resueltos (durante la verificación)
+- **Disco de Docker lleno** (`OSError: No space left on device` al cachear pesos) → se liberaron
+  ~33 GB de imágenes/caché viejos.
+- **`opencv-python` rompe en el contenedor slim** (`ImportError: libxcb.so.1`, deps GUI/X11) →
+  se cambió a **`opencv-python-headless`** (misma API `cv2`, sin GUI), estándar para contenedores.
+
+### Referencias al código
+- `backend/src/serving/clip_inference.py`, `backend/src/api/routers/clip_predict.py`,
+  `backend/src/api/{main.py,schemas.py}`, `backend/src/config.py`, `backend/Dockerfile`,
+  `docker-compose.yml`, `backend/pyproject.toml`.
+- Tests: `backend/tests/test_{clip_inference,clip_predict,clip_schemas,config_clip}.py`.
+- Spec: `docs/superpowers/specs/2026-06-18-cnn-clips-serving-design.md`.
+  Plan: `docs/superpowers/plans/2026-06-18-cnn-clips-serving.md`.
+
+### Uso de IA generativa
+Desarrollado con Claude Code (brainstorming, spec, plan, implementación TDD vía subagentes,
+diagnóstico de los problemas de disco/OpenCV, verificación end-to-end en docker). El estudiante
+decidió la arquitectura (misma imagen, pesos pre-cacheados) y validó el resultado.
