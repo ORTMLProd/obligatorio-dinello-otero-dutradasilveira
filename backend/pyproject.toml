@@ -20,7 +20,8 @@ dependencies = [
     # Clip model serving (Fase 3.5): the API runs the CNN + Grad-CAM on uploaded videos.
     "torch>=2.4",
     "torchvision>=0.19",
-    "opencv-python>=4.10",
+    # Headless build: same cv2 API without the X11/GUI system libs (needed in slim containers).
+    "opencv-python-headless>=4.10",
 ]
 
 [dependency-groups]
