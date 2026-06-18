@@ -26,8 +26,12 @@ FROM python:3.12-slim-bookworm
 RUN groupadd --system --gid 999 nonroot \
     && useradd --system --gid 999 --uid 999 --create-home nonroot
 COPY --from=builder --chown=nonroot:nonroot /app /app
-ENV PATH="/app/.venv/bin:$PATH"
+ENV PATH="/app/.venv/bin:$PATH" \
+    TORCH_HOME="/app/.torch" \
+    OMP_NUM_THREADS=1
 USER nonroot
 WORKDIR /app
+# Pre-cache the frozen ResNet18 ImageNet weights so the API loads the clip model offline.
+RUN python -c "import torchvision; torchvision.models.resnet18(weights='IMAGENET1K_V1')"
 EXPOSE 8000
 CMD ["fastapi", "run", "src/api/main.py", "--host", "0.0.0.0", "--port", "8000"]

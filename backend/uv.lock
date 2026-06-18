@@ -4275,21 +4275,19 @@ dependencies = [
     { name = "fastapi", extra = ["standard"] },
     { name = "joblib" },
     { name = "numpy" },
+    { name = "opencv-python" },
     { name = "pandas" },
     { name = "prometheus-client" },
     { name = "pyarrow" },
     { name = "pydantic-settings", extra = ["yaml"] },
     { name = "scikit-learn" },
+    { name = "torch" },
+    { name = "torchvision" },
     { name = "xgboost" },
 ]
 
 [package.dev-dependencies]
-cnn = [
-    { name = "torch" },
-    { name = "torchvision" },
-]
 data = [
-    { name = "opencv-python" },
     { name = "soccernet" },
 ]
 dev = [
@@ -4312,23 +4310,19 @@ requires-dist = [
     { name = "fastapi", extras = ["standard"], specifier = ">=0.115" },
     { name = "joblib", specifier = ">=1.4" },
     { name = "numpy", specifier = ">=2.0" },
+    { name = "opencv-python", specifier = ">=4.10" },
     { name = "pandas", specifier = ">=2.2" },
     { name = "prometheus-client", specifier = ">=0.21" },
     { name = "pyarrow", specifier = ">=17.0" },
     { name = "pydantic-settings", extras = ["yaml"], specifier = ">=2.5" },
     { name = "scikit-learn", specifier = ">=1.5" },
+    { name = "torch", specifier = ">=2.4" },
+    { name = "torchvision", specifier = ">=0.19" },
     { name = "xgboost", specifier = ">=2.1" },
 ]
 
 [package.metadata.requires-dev]
-cnn = [
-    { name = "torch", specifier = ">=2.4" },
-    { name = "torchvision", specifier = ">=0.19" },
-]
-data = [
-    { name = "opencv-python", specifier = ">=4.10" },
-    { name = "soccernet", specifier = ">=0.1.60" },
-]
+data = [{ name = "soccernet", specifier = ">=0.1.60" }]
 dev = [
     { name = "httpx", specifier = ">=0.27" },
     { name = "ipykernel", specifier = ">=6.29" },
