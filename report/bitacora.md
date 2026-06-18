@@ -780,3 +780,51 @@ Sub-proyecto desarrollado con Claude Code: brainstorming (backbone, augmentation
 spec y plan, implementación TDD vía subagentes con review, diagnóstico del clash OpenMP, y
 orquestación del entrenamiento real local. El estudiante decidió la dirección (visual-only,
 augmentation con medición, no-Colab por NDA) y validó cada paso; es responsable de poder defenderlo.
+
+---
+
+## 2026-06-14 — Fase 3.5, sub-proyecto 3: Grad-CAM (explicabilidad visual)
+
+### Qué se hizo
+- Se implementó **Grad-CAM** para el clip-model: mapas de calor por frame que muestran *qué región*
+  de la imagen sostuvo la predicción. Cierra el lado **visual** del electivo de explicabilidad
+  (complementa al SHAP tabular de la Fase 3.2).
+- `backend/src/models/clip_gradcam.py` (TDD, 2 tasks vía subagentes):
+  - `gradcam_clip(model, clip, class_index=None)`: **forward dedicado con gradientes** (el forward
+    de entrenamiento corre el backbone bajo `no_grad`), hook sobre `layer4` para capturar
+    activaciones y sus gradientes, Grad-CAM **por cada uno de los 8 frames** → `(K,224,224)` en [0,1].
+  - `overlay_heatmap(frame, heatmap)`: mezcla el mapa (colormap jet) sobre el frame (lo usarán el
+    serving y el frontend).
+- Validado **sobre un clip real** (local, NDA-safe — sin mostrar la imagen): clip `corner` →
+  Grad-CAM `corner`, heatmaps de forma/rango correctos, overlay `(224,224,3)`. 88 tests verdes.
+
+### Detalle técnico clave
+- Para que el gradiente llegue a las activaciones de `layer4` **a través del backbone congelado**,
+  el input (`frames`) se marca `requires_grad_(True)`. Sin eso no se construye el grafo y `backward`
+  falla. Los pesos siguen congelados (no se reentrena): el grad fluye hacia las activaciones, no
+  hacia los pesos.
+
+### Por qué / concepto del curso
+- **Explicabilidad de modelos visuales** (electivo): Grad-CAM es la técnica estándar para CNNs.
+- **Reuso sin reentrenar** (single source): usa el mismo `backbone`/`head` del modelo entrenado.
+- **NDA / gobernanza:** los overlays van sobre frames reales → contenido NDA. Este sub-proyecto
+  entrega solo código + tests con frames sintéticos; la visualización real ocurre local en
+  serving/frontend. **Coherencia con la decisión no-Colab:** tampoco se muestran frames reales a
+  terceros (incluido el asistente) — la validación fue numérica.
+
+### Requerimiento de la consigna que cubre
+- Electivo **Explicabilidad** (lado visual). Base del overlay que mostrará el frontend (sub-proyecto 5).
+
+### Alternativas / handoff
+- **Por frame (los 8) vs solo el más saliente** → se devuelven los 8; la selección del frame clave
+  queda downstream. Nota: la normalización por-frame deja todos los picos en 1.0, así que el serving
+  deberá elegir el frame con otro criterio (ej. máximo del cam crudo antes de normalizar).
+
+### Referencias al código
+- `backend/src/models/clip_gradcam.py`. Tests: `backend/tests/test_clip_gradcam.py`.
+- Spec: `docs/superpowers/specs/2026-06-14-cnn-clips-gradcam-design.md`.
+  Plan: `docs/superpowers/plans/2026-06-14-cnn-clips-gradcam.md`.
+
+### Uso de IA generativa
+Desarrollado con Claude Code (brainstorming, spec, plan, implementación TDD vía subagentes,
+validación numérica NDA-safe). Revisado por el estudiante.
