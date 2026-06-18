@@ -36,9 +36,16 @@ class Settings(BaseSettings):
     # Directory holding the exported model bundle (model.joblib). Relative paths resolve
     # against the monorepo root locally; in Docker set API_MODEL_DIR to the mounted path.
     model_dir: str = "models/v0"
+    # Directory holding the exported clip model bundle (clip_model.pt). In Docker set
+    # API_CLIP_MODEL_DIR to the mounted path.
+    clip_model_dir: str = "models/clips-v1"
 
     def resolved_model_dir(self) -> Path:
         path = Path(self.model_dir)
+        return path if path.is_absolute() else _REPO_ROOT / path
+
+    def resolved_clip_model_dir(self) -> Path:
+        path = Path(self.clip_model_dir)
         return path if path.is_absolute() else _REPO_ROOT / path
 
     model_config = SettingsConfigDict(

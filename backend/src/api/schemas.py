@@ -132,3 +132,27 @@ class BatchPredictResponse(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
     predictions: list[PredictResponse]
+
+
+class GradcamFrame(BaseModel):
+    """One Grad-CAM overlay: the frame index and a base64-encoded JPG of the overlay."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    frame_index: int
+    image_base64: str
+
+
+class ClipPredictResponse(BaseModel):
+    """Prediction for an uploaded video clip: class, probabilities and Grad-CAM overlays.
+
+    Powers ``POST /predict/clip`` (Fase 3.5): the visual-only clip model classifies the clip
+    and returns a Grad-CAM overlay (base64 JPG) per sampled frame for the predicted class.
+    """
+
+    model_config = ConfigDict(extra="forbid", protected_namespaces=())
+
+    predicted_label: str
+    probabilities: dict[str, float]
+    model_version: str
+    gradcam: list[GradcamFrame]

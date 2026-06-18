@@ -15,8 +15,10 @@ from contextlib import asynccontextmanager
 from fastapi import FastAPI, Request
 
 from src import __version__
-from src.api.routers import health, metrics, model_info, predict
+from src.api.routers import clip_predict, health, metrics, model_info, predict
 from src.config import get_settings
+from src.models.clip_export import load_clip_bundle
+from src.models.clip_model import pick_device
 from src.models.export import load_bundle
 from src.monitoring.logging import configure_inference_logging
 from src.monitoring.metrics import record_request, set_training_distribution
@@ -40,6 +42,16 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
     except (FileNotFoundError, OSError):
         app.state.bundle = None
         logger.warning("no model bundle at %s — /predict will return 503", model_dir)
+    # Clip model (Fase 3.5). Loaded best-effort; /predict/clip returns 503 if absent.
+    clip_dir = get_settings().resolved_clip_model_dir()
+    try:
+        device = pick_device()
+        app.state.clip_model, app.state.clip_meta = load_clip_bundle(clip_dir, device)
+        app.state.clip_device = device
+        logger.info("loaded clip model from %s (%s)", clip_dir, app.state.clip_meta.model_version)
+    except (FileNotFoundError, OSError):
+        app.state.clip_model = app.state.clip_meta = app.state.clip_device = None
+        logger.warning("no clip model at %s — /predict/clip will return 503", clip_dir)
     yield
 
 
@@ -55,6 +67,7 @@ def create_app() -> FastAPI:
     app.include_router(health.router)
     app.include_router(model_info.router)
     app.include_router(predict.router)
+    app.include_router(clip_predict.router)
     app.include_router(metrics.router)
 
     @app.middleware("http")

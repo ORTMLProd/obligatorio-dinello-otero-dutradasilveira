@@ -11,6 +11,7 @@ services:
       # The trained bundle is produced on the host and mounted in (models/ is gitignored,
       # never baked into the image). Absolute path → used as-is by resolved_model_dir().
       API_MODEL_DIR: /app/models/v0
+      API_CLIP_MODEL_DIR: /app/models/clips-v1
     volumes:
       # Read-only mount of the exported model. If empty (before training) /predict → 503.
       - ./models:/app/models:ro
