@@ -1,0 +1,165 @@
+<!doctype html>
+<!-- MOCKUP (no productivo) — Fase 3.5 sub-proyecto 5: modo "Video" (upload → Grad-CAM). -->
+<html lang="es">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>SoccerNet · Modo Video — mockup</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      href="https://fonts.googleapis.com/css2?family=Sora:wght@400;600;800&family=DM+Mono:wght@400;500&display=swap"
+      rel="stylesheet"
+    />
+    <style>
+      :root {
+        --board: #0a2622; --board-2: #0e302a; --panel: #103a32; --chalk: #eaf3ef;
+        --chalk-dim: #7fa79b; --line: #225349; --amber: #ffb13b; --lime: #7ee081; --red: #ff7a7a;
+      }
+      * { box-sizing: border-box; margin: 0; padding: 0; }
+      body {
+        font-family: "Sora", sans-serif; background: var(--board); color: var(--chalk);
+        min-height: 100vh; -webkit-font-smoothing: antialiased;
+        background-image:
+          radial-gradient(900px 500px at 50% -20%, rgba(126,224,129,0.07), transparent 60%),
+          repeating-linear-gradient(90deg, transparent 0 59px, rgba(255,255,255,0.018) 59px 60px);
+      }
+      .mono { font-family: "DM Mono", monospace; font-variant-numeric: tabular-nums; }
+      .wrap { max-width: 1160px; margin: 0 auto; padding: 26px 26px 60px; }
+      .hdr { display:flex; justify-content:space-between; align-items:center; gap:16px; border-bottom:1px dashed var(--line); padding-bottom:18px; }
+      .brand { display:flex; align-items:center; gap:13px; }
+      .ball { width:38px; height:38px; border-radius:50%; border:2px solid var(--chalk); position:relative; flex:none; }
+      .ball::before { content:""; position:absolute; inset:8px; border-radius:50%; border:1.5px solid var(--chalk-dim); }
+      .brand h1 { font-size:1.35rem; font-weight:800; letter-spacing:-0.01em; }
+      .brand .s { font-size:0.7rem; letter-spacing:0.16em; text-transform:uppercase; color:var(--chalk-dim); margin-top:2px; }
+      .hdr-meta { display:flex; gap:18px; font-family:"DM Mono",monospace; font-size:0.78rem; }
+      .hdr-meta .k { color:var(--chalk-dim); font-size:0.6rem; letter-spacing:0.12em; text-transform:uppercase; }
+
+      /* toggle */
+      .modes { display:flex; gap:6px; margin-top:22px; background:var(--board-2); border:1px solid var(--line); border-radius:11px; padding:5px; width:fit-content; }
+      .modes button { font-family:"Sora",sans-serif; font-weight:600; font-size:0.84rem; padding:8px 20px; border:0; border-radius:8px; background:transparent; color:var(--chalk-dim); cursor:pointer; }
+      .modes button.on { background:var(--amber); color:var(--board); }
+
+      .grid { display:grid; grid-template-columns:0.85fr 1.15fr; gap:22px; margin-top:18px; align-items:start; }
+      @media (max-width:920px){ .grid{ grid-template-columns:1fr; } }
+      .card { background:var(--board-2); border:1px solid var(--line); border-radius:14px; padding:20px; }
+      .card-t { font-size:0.7rem; letter-spacing:0.16em; text-transform:uppercase; color:var(--amber); margin-bottom:16px; display:flex; justify-content:space-between; }
+      .card-t .hint { color:var(--chalk-dim); letter-spacing:0.08em; }
+      .stack { display:flex; flex-direction:column; gap:18px; min-width:0; }
+
+      /* dropzone */
+      .drop { border:1.5px dashed var(--line); border-radius:12px; padding:34px 18px; text-align:center; background:rgba(126,224,129,0.03); transition:border-color .15s; }
+      .drop:hover { border-color:var(--lime); }
+      .drop .ic { font-size:2rem; color:var(--lime); }
+      .drop .t { font-weight:600; margin-top:10px; }
+      .drop .d { font-size:0.78rem; color:var(--chalk-dim); margin-top:5px; }
+      .file { display:flex; align-items:center; gap:10px; margin:16px 0; padding:10px 13px; border:1px solid var(--line); border-radius:9px; background:var(--panel); font-family:"DM Mono",monospace; font-size:0.8rem; }
+      .file .x { margin-left:auto; color:var(--chalk-dim); cursor:pointer; }
+      .note { font-size:0.74rem; color:var(--chalk-dim); border-left:3px solid var(--lime); padding:6px 12px; margin:14px 0; line-height:1.5; }
+      .btn { width:100%; padding:13px; border:0; border-radius:9px; background:var(--amber); color:var(--board); font-family:"Sora",sans-serif; font-weight:800; font-size:0.95rem; cursor:pointer; }
+
+      /* verdict */
+      .verdict .pre { font-size:0.68rem; letter-spacing:0.16em; text-transform:uppercase; color:var(--chalk-dim); }
+      .verdict .cls { font-size:2.4rem; font-weight:800; line-height:1; color:var(--amber); margin:6px 0 2px; text-transform:capitalize; }
+      .verdict .conf { font-family:"DM Mono",monospace; font-size:1.05rem; color:var(--lime); }
+
+      /* gradcam hero */
+      .gc-main { position:relative; width:100%; aspect-ratio:1/1; border-radius:10px; overflow:hidden; border:1px solid var(--line);
+        background:
+          radial-gradient(circle at 68% 38%, rgba(255,40,40,0.85), rgba(255,177,59,0.5) 18%, rgba(126,224,129,0.25) 34%, transparent 50%),
+          linear-gradient(160deg,#16433a,#0c2e28); }
+      .gc-main .tag { position:absolute; left:10px; bottom:10px; font-family:"DM Mono",monospace; font-size:0.7rem; color:var(--chalk); background:rgba(7,11,9,0.6); padding:3px 8px; border-radius:6px; }
+      .gc-strip { display:grid; grid-template-columns:repeat(8,1fr); gap:7px; margin-top:12px; }
+      .gc-thumb { aspect-ratio:1/1; border-radius:7px; border:1px solid var(--line); cursor:pointer;
+        background:radial-gradient(circle at 60% 40%, rgba(255,80,40,0.7), rgba(255,177,59,0.35) 30%, transparent 55%), linear-gradient(160deg,#16433a,#0c2e28); }
+      .gc-thumb.on { border:2px solid var(--amber); }
+
+      /* prob bars */
+      .pbar { margin-bottom:10px; }
+      .pbar .top { display:flex; justify-content:space-between; margin-bottom:5px; font-size:0.8rem; }
+      .pbar.win .top { color:var(--amber); font-weight:600; }
+      .pbar .vl { font-family:"DM Mono",monospace; color:var(--chalk-dim); }
+      .pbar.win .vl { color:var(--amber); }
+      .tr { height:8px; background:var(--panel); border-radius:5px; overflow:hidden; }
+      .fl { height:100%; background:linear-gradient(90deg,#3a8f6a,var(--lime)); border-radius:5px; }
+      .fl.dim { background:var(--line); }
+      .foot { margin-top:28px; text-align:center; font-size:0.7rem; color:var(--chalk-dim); letter-spacing:0.08em; }
+    </style>
+  </head>
+  <body>
+    <div class="wrap">
+      <header class="hdr">
+        <div class="brand">
+          <div class="ball"></div>
+          <div><h1>SoccerNet · Eventos</h1><div class="s">Pizarra de clasificación</div></div>
+        </div>
+        <div class="hdr-meta">
+          <div><div class="k">Modelo</div>clips-v1-aug</div>
+          <div><div class="k">Macro-F1</div>0.640</div>
+          <div><div class="k">Estado</div><span style="color:var(--lime)">● en línea</span></div>
+        </div>
+      </header>
+
+      <div class="modes">
+        <button>Ventana</button>
+        <button class="on">Video</button>
+      </div>
+
+      <div class="grid">
+        <!-- INPUT: subir video -->
+        <section class="card">
+          <div class="card-t">Subir clip · entrada</div>
+          <div class="drop">
+            <div class="ic">⬆</div>
+            <div class="t">Arrastrá un video o hacé click</div>
+            <div class="d">mp4 / mkv / mov · hasta ~30s</div>
+          </div>
+          <div class="file">
+            <span>🎞</span> partido_corner_44min.mp4
+            <span class="x">✕</span>
+          </div>
+          <div class="note">
+            El video se procesa <b>en el momento</b> y no se guarda. El modelo extrae 8 frames
+            y predice solo con la imagen (sin contexto del partido).
+          </div>
+          <button class="btn">Analizar video ▸</button>
+        </section>
+
+        <!-- OUTPUT -->
+        <div class="stack">
+          <section class="card">
+            <div class="card-t">Lectura del clip <span class="hint mono">clips-v1-aug</span></div>
+            <div class="verdict" style="margin-bottom:16px">
+              <div class="pre">Clase predicha</div>
+              <div class="cls">Corner</div>
+              <div class="conf">71% confianza</div>
+            </div>
+            <div class="gc-main">
+              <div class="tag">Grad-CAM · frame 3/8 · dónde mira el modelo</div>
+            </div>
+            <div class="gc-strip">
+              <div class="gc-thumb"></div>
+              <div class="gc-thumb"></div>
+              <div class="gc-thumb on"></div>
+              <div class="gc-thumb"></div>
+              <div class="gc-thumb"></div>
+              <div class="gc-thumb"></div>
+              <div class="gc-thumb"></div>
+              <div class="gc-thumb"></div>
+            </div>
+          </section>
+
+          <section class="card">
+            <div class="card-t">Probabilidades por clase</div>
+            <div class="pbar win"><div class="top"><span>corner</span><span class="vl">0.71</span></div><div class="tr"><div class="fl" style="width:71%"></div></div></div>
+            <div class="pbar"><div class="top"><span>substitution</span><span class="vl">0.14</span></div><div class="tr"><div class="fl dim" style="width:14%"></div></div></div>
+            <div class="pbar"><div class="top"><span>background</span><span class="vl">0.07</span></div><div class="tr"><div class="fl dim" style="width:7%"></div></div></div>
+            <div class="pbar"><div class="top"><span>goal</span><span class="vl">0.05</span></div><div class="tr"><div class="fl dim" style="width:5%"></div></div></div>
+            <div class="pbar"><div class="top"><span>card</span><span class="vl">0.03</span></div><div class="tr"><div class="fl dim" style="width:3%"></div></div></div>
+          </section>
+        </div>
+      </div>
+      <footer class="foot">Mockup estático · modo video · datos de ejemplo (los overlays serían los reales de la API)</footer>
+    </div>
+  </body>
+</html>

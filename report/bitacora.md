@@ -888,3 +888,58 @@ validación numérica NDA-safe). Revisado por el estudiante.
 Desarrollado con Claude Code (brainstorming, spec, plan, implementación TDD vía subagentes,
 diagnóstico de los problemas de disco/OpenCV, verificación end-to-end en docker). El estudiante
 decidió la arquitectura (misma imagen, pesos pre-cacheados) y validó el resultado.
+
+---
+
+## 2026-06-18 — Fase 3.5, sub-proyecto 5: Frontend (modo Video) · cierre de la Fase 3.5
+
+### Qué se hizo
+- Se agregó al frontend React un **modo "Video"** (toggle `Ventana | Video`): subir un clip →
+  `POST /predict/clip` → mostrar clase, probabilidades y los **overlays de Grad-CAM** (un frame
+  grande + tira de 8 miniaturas clickeables). Reusa la pizarra táctica de la Fase 3.3.
+- Componentes nuevos: `VideoForm` (upload), `ClipPrediction` (veredicto + Grad-CAM + barras),
+  `GradcamViewer` (frame grande + tira). Cliente `predictClip(file)` (multipart, sin CORS).
+- **Se sumó capa de tests al frontend:** setup de **Vitest** + helpers puros en `lib/format.ts`
+  (`sortedByValueDesc`, `confidencePct`, `clampIndex`) con sus tests. Decisión: unit-testear la
+  **lógica pura** (no el rendering trivial); el render/integración se verifica end-to-end.
+- Verificado **end-to-end** (frontend dev + API real con ambos modelos): subir un video → clase +
+  barras + Grad-CAM real renderizado; el toggle alterna con la demo de ventana.
+
+### Por qué / concepto del curso
+- **Visualización/UI** (electivo) extendida al flujo de video: el usuario interactúa con el modelo
+  subiendo un clip y ve la explicación visual.
+- **Sin CORS, mismo código dev/prod:** rutas relativas `/api/...` vía reverse-proxy (Vite/nginx).
+- **Estrategia de testing por capas:** ML/datos/serving con pytest en el backend; lógica pura del
+  front con Vitest; rendering con verificación end-to-end. Criterio de *qué* testear en cada capa.
+- **NDA:** el video lo sube el usuario y se procesa en memoria (sub-proyecto 4); los overlays se
+  muestran en su navegador; la verificación se hizo con video sintético (no se mostraron frames
+  reales a terceros).
+
+### Requerimiento de la consigna que cubre
+- Cierra el **electivo de Visualización/UI** del lado del video y completa la integración de video
+  en el flujo (objetivo central de la Fase 3.5).
+
+### Decisiones
+- **Toggle Ventana | Video** (vs todo en una vista / ruta separada): separación limpia sin sumar
+  routing.
+- **Grad-CAM: frame grande + tira de 8** (vs grilla / scrubber).
+- **Agregar Vitest** (vs dejar el front sin tests): cierra el hueco con costo bajo y mejora el
+  código (helpers puros DRY).
+
+### Referencias al código
+- `frontend/src/components/{VideoForm,ClipPrediction,GradcamViewer}.tsx`,
+  `frontend/src/lib/{api.ts,types.ts,format.ts,format.test.ts}`, `frontend/src/App.tsx`,
+  `frontend/src/index.css`, `frontend/package.json` (Vitest). Mockup: `frontend/mockups/predict-video.html`.
+- Spec: `docs/superpowers/specs/2026-06-18-cnn-clips-frontend-design.md`.
+  Plan: `docs/superpowers/plans/2026-06-18-cnn-clips-frontend.md`.
+
+### Cierre de la Fase 3.5 (CNN de clips de video)
+Los 5 sub-proyectos quedaron completos: **(1) Datos** (descarga de videos NDA + extracción de
+clips), **(2) Modelo** (CNN multi-frame ResNet18 congelada + augmentation medida), **(3) Grad-CAM**,
+**(4) Serving** (`/predict/clip` en docker) y **(5) Frontend** (modo Video). El objetivo —subir un
+video y que el modelo prediga el evento con explicación visual— quedó funcionando de punta a punta.
+
+### Uso de IA generativa
+Sub-proyecto desarrollado con Claude Code (mockup, spec, plan, implementación TDD/Vitest vía
+subagentes, verificación end-to-end con Playwright). El estudiante eligió la dirección visual y la
+estrategia de testing, y validó el resultado; es responsable de poder defenderlo.

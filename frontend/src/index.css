@@ -504,3 +504,134 @@ body {
     transition: none;
   }
 }
+
+/* ---------- modo video (Fase 3.5) ---------- */
+.modes {
+  display: flex;
+  gap: 6px;
+  margin-top: 22px;
+  background: var(--board-2);
+  border: 1px solid var(--line);
+  border-radius: 11px;
+  padding: 5px;
+  width: fit-content;
+}
+.modes button {
+  font-family: "Sora", sans-serif;
+  font-weight: 600;
+  font-size: 0.84rem;
+  padding: 8px 20px;
+  border: 0;
+  border-radius: 8px;
+  background: transparent;
+  color: var(--chalk-dim);
+  cursor: pointer;
+}
+.modes button.on {
+  background: var(--amber);
+  color: var(--board);
+}
+
+.dropzone {
+  width: 100%;
+  border: 1.5px dashed var(--line);
+  border-radius: 12px;
+  padding: 34px 18px;
+  text-align: center;
+  background: rgba(126, 224, 129, 0.03);
+  cursor: pointer;
+  transition: border-color 0.15s ease;
+}
+.dropzone:hover {
+  border-color: var(--lime);
+}
+.dropzone .ic {
+  font-size: 2rem;
+  color: var(--lime);
+}
+.dropzone .t {
+  font-weight: 600;
+  margin-top: 10px;
+}
+.dropzone .d {
+  font-size: 0.78rem;
+  color: var(--chalk-dim);
+  margin-top: 5px;
+}
+.vid-file {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin: 16px 0;
+  padding: 10px 13px;
+  border: 1px solid var(--line);
+  border-radius: 9px;
+  background: var(--panel);
+  font-family: "DM Mono", monospace;
+  font-size: 0.8rem;
+  word-break: break-all;
+}
+.vid-file .x {
+  margin-left: auto;
+  color: var(--chalk-dim);
+  cursor: pointer;
+  flex: none;
+}
+.vid-note {
+  font-size: 0.74rem;
+  color: var(--chalk-dim);
+  border-left: 3px solid var(--lime);
+  padding: 6px 12px;
+  margin: 14px 0;
+  line-height: 1.5;
+}
+
+.gc-main {
+  position: relative;
+  width: 100%;
+  aspect-ratio: 1 / 1;
+  border-radius: 10px;
+  overflow: hidden;
+  border: 1px solid var(--line);
+  background: var(--panel);
+}
+.gc-main img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  display: block;
+}
+.gc-main .tag {
+  position: absolute;
+  left: 10px;
+  bottom: 10px;
+  font-size: 0.7rem;
+  color: var(--chalk);
+  background: rgba(7, 11, 9, 0.6);
+  padding: 3px 8px;
+  border-radius: 6px;
+}
+.gc-strip {
+  display: grid;
+  grid-template-columns: repeat(8, 1fr);
+  gap: 7px;
+  margin-top: 12px;
+}
+.gc-thumb {
+  aspect-ratio: 1 / 1;
+  border-radius: 7px;
+  border: 1px solid var(--line);
+  overflow: hidden;
+  cursor: pointer;
+  padding: 0;
+  background: var(--panel);
+}
+.gc-thumb img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  display: block;
+}
+.gc-thumb.on {
+  border: 2px solid var(--amber);
+}
