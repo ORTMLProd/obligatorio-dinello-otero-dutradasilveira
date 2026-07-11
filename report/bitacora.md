@@ -1253,3 +1253,59 @@ logs de la instancia, diagnóstico del corte de sesión del lab) hecha por Claud
 usuario aprobó explícitamente el paso de `eb create` antes de que se ejecutara (acción
 facturable) y proveyó la contraseña NDA y las credenciales AWS de forma directa (sin
 pegarlas en el chat cuando fue posible). Pendiente de retomar y cerrar la validación final.
+
+---
+
+## 2026-07-11 — Deploy a AWS EB: cierre (instancia rota diagnosticada y reemplazada)
+
+### Qué se hizo
+Al recuperar acceso a AWS tras el reinicio del lab, el entorno seguía en `Health: No
+Data` en vez de recuperarse solo. Se diagnosticó **sin usar SSH** (no había keypair
+configurado) vía **AWS Systems Manager Run Command** (`aws ssm send-command`,
+disponible porque `LabRole` ya tenía `AmazonSSMManagedInstanceCore` adjunta):
+`docker.service` estaba `inactive (dead)` y no existía ni un solo archivo de log de
+`cfn-init`/`eb-engine` en la instancia — el bootstrap murió en el primer paso (la
+descarga del script de arranque de EB desde S3), exactamente en la ventana de tiempo en
+que el deny policy `voc-cancel-cred` del lab estaba activo. La instancia nunca llegó a
+tener estado ni aplicación corriendo, así que se terminó manualmente
+(`aws ec2 terminate-instances`) para que el Auto Scaling Group de EB lanzara una
+reemplazante — que bootstrapeó limpio en ~3 minutos con la sesión del lab ya estable.
+
+**Resultado final, verificado con requests reales:** frontend (200), `/api/health`,
+`/api/model-info` (modelo cargado), **`/api/predict` con un payload real devuelve
+predicción + SHAP**, **MLflow (5500): 200**, **Grafana (3000): 200**. El deploy a AWS
+Elastic Beanstalk queda cerrado y funcionando de punta a punta.
+
+### Por qué se hizo así
+- **Diagnosticar antes de reintentar a ciegas.** Ante "no se recupera solo", la tentación
+  fácil es simplemente reintentar `eb deploy` repetidas veces. En cambio se usó SSM Run
+  Command para *ver* el estado real de la instancia (servicios, logs) y confirmar la
+  causa raíz exacta antes de actuar — mismo principio que con el diagnóstico de MLflow.
+- **Terminar en vez de esperar a que se autorepare.** Como `docker.service` nunca arrancó,
+  no había ningún proceso vivo que pudiera reintentar el bootstrap por su cuenta; el único
+  mecanismo de recuperación real en una arquitectura de Auto Scaling Group es reemplazar
+  la instancia. Se confirmó con el usuario antes de terminarla (acción destructiva) aunque
+  el riesgo era bajo (instancia sin estado ni aplicación corriendo).
+
+### Concepto del curso relacionado
+- **Infraestructura efímera y auto-healing:** un ASG de una sola instancia igual da
+  resiliencia ante un fallo de arranque, siempre que alguien (o un proceso automatizado)
+  dispare el reemplazo — acá se hizo manual, pero el patrón es el mismo que un health
+  check automatizado en un pipeline real.
+- **Observabilidad sin acceso directo:** SSM Run Command permitió diagnosticar sin abrir
+  puertos SSH ni generar un keypair nuevo — superficie de ataque mínima, resuelto con los
+  permisos que ya traía `LabRole`.
+
+### Decisión
+**Cerrado.** El entorno `soccer-net-prod` está en `Health: Ok`, con los 5 servicios del
+stack corriendo y verificados con tráfico real. URL:
+`soccer-net-prod.eba-cyqdfnnq.us-east-1.elasticbeanstalk.com`.
+
+### Referencias al código
+- Sin cambios de código en esta entrada (fue diagnóstico + operación de infraestructura).
+  Comandos documentados en el README ("Deploy a AWS Elastic Beanstalk").
+
+### Uso de IA generativa
+Diagnóstico vía SSM y decisión de terminar la instancia hechos por Claude Code, con
+confirmación explícita del usuario antes de la acción destructiva (`terminate-instances`).
+Validación final de los 5 endpoints hecha por el asistente con requests reales.
