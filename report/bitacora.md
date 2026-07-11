@@ -1167,3 +1167,89 @@ diagnóstico y resolución de los tres bloqueadores del entorno (uv, password, l
 verificación de los tags/métricas en MLflow hechos por el asistente. El usuario proveyó la
 contraseña del NDA de forma segura (directo en `.env`) y es responsable de poder explicar
 los resultados y la decisión de adopción.
+
+---
+
+## 2026-07-11 — Deploy a AWS Elastic Beanstalk: primera ejecución real
+
+### Qué se hizo
+Con `models/v0` ya entrenado, se ejecutó el deploy planeado en la entrada anterior:
+
+1. Build + push a ECR de `soccer-net/api` (con el modelo horneado, `Dockerfile.deploy.api`)
+   y `soccer-net/frontend`, tageadas `:latest` y `:d03dd9c` (commit).
+2. `eb init -p docker soccer-net --region us-east-1` + `eb create soccer-net-prod --single
+   --instance_type t3.medium --instance_profile LabInstanceProfile --service-role LabRole`.
+3. **`eb create` funcionó al primer intento** (`Health: Green` en ~5 minutos) — el swap
+   temporal `docker-compose.yml` ↔ `docker-compose.prod.yml` vía dos commits (uno de ida,
+   uno de vuelta alrededor del `eb create`) resultó necesario porque `eb create`, a
+   diferencia de `eb deploy`, no soporta `--staged`.
+4. Validación end-to-end: frontend (200), `/api/health`, `/api/model-info` (modelo XGBoost
+   cargado, coincide con el run entrenado), **`/api/predict` con un payload real devolvió
+   una predicción + explicaciones SHAP** — el ciclo completo cierra en la nube. Grafana
+   accesible. MLflow devolvía 403.
+5. MLflow 403 resuelto en dos iteraciones: la protección anti DNS-rebinding de MLflow 3
+   (`--allowed-hosts`) necesitaba explícitamente el patrón de dominio de EB, y **además**
+   el puerto (`*.elasticbeanstalk.com:5500`) porque el Host header del cliente lo incluye
+   y el wildcard no lo cubre solo. Cada fix se validó leyendo los logs reales de la
+   instancia (`eb logs --all`) en vez de asumir — el primer intento parecía razonable
+   pero los logs mostraron que el middleware quedaba activo con el allowlist "correcto"
+   y aun así rechazaba, lo que apuntó al problema real (puerto en el Host header).
+6. **Bloqueado a mitad del segundo redeploy**: la sesión del AWS Academy Learner Lab
+   terminó (policy de deny explícito `voc-cancel-cred` aplicada por la plataforma del
+   lab), cortando todo acceso AWS (`ec2:DescribeInstances`, `s3:CreateBucket`, etc.) justo
+   después de que el redeploy con el segundo fix de MLflow completara exitosamente según
+   los logs de EB. No se pudo re-verificar el estado final de MLflow tras ese último
+   redeploy. Pendiente: retomar con credenciales nuevas del lab y confirmar `eb status` +
+   los 4 endpoints.
+
+### Por qué se hizo así
+- **Verificar con logs reales, no asumir.** El primer intento de arreglar MLflow (agregar
+  `*.elasticbeanstalk.com` a `--allowed-hosts`) era razonable pero insuficiente. En vez de
+  suponer que "seguro es algo de la imagen vieja" o iterar a ciegas, se leyeron los logs de
+  `docker compose logs` en la instancia (vía `eb logs --all`) y se confirmó que el
+  middleware SÍ tenía el allowlist nuevo aplicado — lo que descartó la hipótesis de imagen
+  desactualizada y señaló el problema real (el puerto en el Host header).
+- **CPU-only torch (bug encontrado durante el build, no planeado).** Ver detalle en el
+  commit `fix: resolver torch/torchvision a wheels CPU-only en Linux` — reducir la imagen
+  de api de una descarga con timeout (>2GB de CUDA) a ~1GB, sin tocar la resolución local
+  en macOS (marker `sys_platform == 'linux'`).
+- **Compute local para builds (buildx + QEMU) tuvo fricción real:** dos rondas de "no
+  space left on device" en el disco virtual de Docker Desktop (58.6GB fijos), resueltas
+  liberando build cache viejo. Vale la pena documentarlo porque es una limitación de
+  correr el pipeline de deploy desde una laptop, no del diseño de la infra en sí.
+
+### Concepto del curso relacionado
+- **Verificación empírica sobre suposición:** ante un fix que "debería funcionar" y no
+  funciona, la respuesta correcta es leer los logs del sistema real (la instancia EB) en
+  vez de iterar a ciegas sobre hipótesis — mismo principio que depurar un modelo mirando
+  las predicciones reales en vez de asumir por qué falla.
+- **Reproducibilidad de entorno (Linux vs. macOS):** el problema de torch CUDA solo
+  aparece al cross-buildear para Linux (target real de producción) — otro ejemplo de por
+  qué el entorno de serving no puede inferirse del entorno de desarrollo.
+- **Infraestructura efímera (AWS Academy Lab):** el corte de sesión a mitad de un deploy
+  es justamente el tipo de evento que un pipeline de CI/CD real necesita tolerar
+  (reintentable, idempotente) — `scripts/deploy_eb.sh` y el flujo de `eb deploy` ya son
+  seguros para reintentar sin dejar el repo en un estado inconsistente (el swap se
+  revierte siempre, incluso si el deploy en sí falla).
+
+### Requerimiento de la consigna que cubre
+- Extiende el mínimo end-to-end (Fase 2) a un despliegue real verificado con una
+  predicción real de punta a punta, no solo "la infra levanta".
+
+### Decisión
+**En progreso, no cerrado.** El entorno EB llegó a `Health: Green` con las 4 piezas
+funcionando (frontend, api con predicción real, grafana; mlflow con el fix aplicado pero
+sin re-verificar tras el corte de sesión). Se retoma en la próxima sesión con credenciales
+nuevas del lab.
+
+### Referencias al código
+- Commits de esta sesión (deploy real): `f41ef61` (swap temporal), `751663e` (revert),
+  `e40b082` y `0e5dc6f` (fixes de MLflow `--allowed-hosts`).
+- `mlflow/Dockerfile`, `scripts/deploy_eb.sh`.
+
+### Uso de IA generativa
+Ejecución completa (builds, `eb create`/`eb deploy`, diagnóstico de los 403 de MLflow vía
+logs de la instancia, diagnóstico del corte de sesión del lab) hecha por Claude Code. El
+usuario aprobó explícitamente el paso de `eb create` antes de que se ejecutara (acción
+facturable) y proveyó la contraseña NDA y las credenciales AWS de forma directa (sin
+pegarlas en el chat cuando fue posible). Pendiente de retomar y cerrar la validación final.
