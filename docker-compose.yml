@@ -1,23 +1,22 @@
-# Variante de docker-compose.yml para deploy en AWS Elastic Beanstalk (plataforma
-# Docker, single-instance). NO es el archivo que se usa para `docker compose up`
-# local -- ver README para el flujo de deploy (swap temporal a docker-compose.yml
-# vía scripts/deploy_eb.sh).
-#
-# Diferencias contra docker-compose.yml de dev:
-#   - api/frontend usan `image:` (ECR) en vez de `build:`.
-#   - frontend publica 80:80 (único puerto que EB abre por default).
-#   - api no monta ./models: el modelo va horneado en la imagen de deploy
-#     (ver Dockerfile.deploy.api).
-#   - mlflow/prometheus/grafana quedan igual: se buildean/pullean en la propia
-#     instancia EC2 al deployar (no tienen ECR repo propio).
 services:
   api:
-    image: 625067806263.dkr.ecr.us-east-1.amazonaws.com/soccer-net/api:latest
+    build: ./backend
+    # In production the API would be internal-only (`expose`). We also map it to the
+    # host for direct debugging (curl http://localhost:8000/health). The browser never
+    # uses this port — it always goes through the frontend's nginx reverse-proxy.
+    ports:
+      - "8000:8000"
     environment:
       API_LOG_LEVEL: info
+      # The trained bundle is produced on the host and mounted in (models/ is gitignored,
+      # never baked into the image). Absolute path → used as-is by resolved_model_dir().
       API_MODEL_DIR: /app/models/v0
       API_CLIP_MODEL_DIR: /app/models/clips-v1
+    volumes:
+      # Read-only mount of the exported model. If empty (before training) /predict → 503.
+      - ./models:/app/models:ro
     healthcheck:
+      # `python` (urllib) instead of curl, which is not present in python:3.12-slim.
       test:
         - CMD
         - python
@@ -29,24 +28,30 @@ services:
       start_period: 10s
 
   frontend:
-    image: 625067806263.dkr.ecr.us-east-1.amazonaws.com/soccer-net/frontend:latest
+    build: ./frontend
     ports:
-      - "80:80" # abrir http://<eb-url>
+      - "8080:80" # abrir http://localhost:8080
     depends_on:
       api:
         condition: service_healthy
 
+  # Trazabilidad de ML (Electivo 1). Sirve la UI en :5000 sobre el mismo backend store
+  # (sqlite) y artifact root que usa el training cuando se le apunta con
+  # MLFLOW_TRACKING_URI=http://localhost:5000. Runs + Model Registry persisten en el volumen.
   mlflow:
     build: ./mlflow
+    # Host 5500 (no 5000): en macOS el 5000 lo toma AirPlay/Control Center.
+    # El training apunta con MLFLOW_TRACKING_URI=http://localhost:5500.
     ports:
-      - "5500:5000" # abrir http://<eb-url>:5500
+      - "5500:5000" # abrir http://localhost:5500
     volumes:
       - mlflow-data:/mlflow
 
+  # Monitoreo (Fase 3.4). Prometheus scrapea /metrics de la API; Grafana lo visualiza.
   prometheus:
     image: prom/prometheus:v3.1.0
     ports:
-      - "9090:9090"
+      - "9090:9090" # abrir http://localhost:9090
     volumes:
       - ./monitoring/prometheus/prometheus.yml:/etc/prometheus/prometheus.yml:ro
       - prometheus-data:/prometheus
@@ -57,12 +62,14 @@ services:
   grafana:
     image: grafana/grafana:11.4.0
     ports:
-      - "3000:3000" # abrir http://<eb-url>:3000 (admin/admin)
+      - "3000:3000" # abrir http://localhost:3000 (admin/admin)
     environment:
+      # Demo local: anónimo con rol Viewer para abrir el dashboard sin login.
       GF_AUTH_ANONYMOUS_ENABLED: "true"
       GF_AUTH_ANONYMOUS_ORG_ROLE: Viewer
       GF_USERS_DEFAULT_THEME: dark
     volumes:
+      # Datasource + provider provisionados, y el JSON del dashboard montado donde lo busca.
       - ./monitoring/grafana/provisioning:/etc/grafana/provisioning:ro
       - ./monitoring/grafana/dashboards:/var/lib/grafana/dashboards:ro
       - grafana-data:/var/lib/grafana
