@@ -1,0 +1,75 @@
+# Variante de docker-compose.yml para deploy en AWS Elastic Beanstalk (plataforma
+# Docker, single-instance). NO es el archivo que se usa para `docker compose up`
+# local -- ver README para el flujo de deploy (swap temporal a docker-compose.yml
+# vía scripts/deploy_eb.sh).
+#
+# Diferencias contra docker-compose.yml de dev:
+#   - api/frontend usan `image:` (ECR) en vez de `build:`.
+#   - frontend publica 80:80 (único puerto que EB abre por default).
+#   - api no monta ./models: el modelo va horneado en la imagen de deploy
+#     (ver Dockerfile.deploy.api).
+#   - mlflow/prometheus/grafana quedan igual: se buildean/pullean en la propia
+#     instancia EC2 al deployar (no tienen ECR repo propio).
+services:
+  api:
+    image: 625067806263.dkr.ecr.us-east-1.amazonaws.com/soccer-net/api:latest
+    environment:
+      API_LOG_LEVEL: info
+      API_MODEL_DIR: /app/models/v0
+      API_CLIP_MODEL_DIR: /app/models/clips-v1
+    healthcheck:
+      test:
+        - CMD
+        - python
+        - -c
+        - import urllib.request, sys; urllib.request.urlopen("http://localhost:8000/health"); sys.exit(0)
+      interval: 10s
+      timeout: 3s
+      retries: 5
+      start_period: 10s
+
+  frontend:
+    image: 625067806263.dkr.ecr.us-east-1.amazonaws.com/soccer-net/frontend:latest
+    ports:
+      - "80:80" # abrir http://<eb-url>
+    depends_on:
+      api:
+        condition: service_healthy
+
+  mlflow:
+    build: ./mlflow
+    ports:
+      - "5500:5000" # abrir http://<eb-url>:5500
+    volumes:
+      - mlflow-data:/mlflow
+
+  prometheus:
+    image: prom/prometheus:v3.1.0
+    ports:
+      - "9090:9090"
+    volumes:
+      - ./monitoring/prometheus/prometheus.yml:/etc/prometheus/prometheus.yml:ro
+      - prometheus-data:/prometheus
+    depends_on:
+      api:
+        condition: service_healthy
+
+  grafana:
+    image: grafana/grafana:11.4.0
+    ports:
+      - "3000:3000" # abrir http://<eb-url>:3000 (admin/admin)
+    environment:
+      GF_AUTH_ANONYMOUS_ENABLED: "true"
+      GF_AUTH_ANONYMOUS_ORG_ROLE: Viewer
+      GF_USERS_DEFAULT_THEME: dark
+    volumes:
+      - ./monitoring/grafana/provisioning:/etc/grafana/provisioning:ro
+      - ./monitoring/grafana/dashboards:/var/lib/grafana/dashboards:ro
+      - grafana-data:/var/lib/grafana
+    depends_on:
+      - prometheus
+
+volumes:
+  mlflow-data:
+  prometheus-data:
+  grafana-data:

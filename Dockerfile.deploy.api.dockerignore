@@ -1,0 +1,19 @@
+# Ignore-file específico para `docker build -f Dockerfile.deploy.api` (BuildKit
+# usa este archivo en vez de .dockerignore cuando existe uno con el nombre
+# "<Dockerfile>.dockerignore"). A diferencia del .dockerignore genérico de la
+# raíz, acá NO excluimos /models/: este build necesita hornear models/v0 y
+# models/clips-v1 adentro de la imagen de deploy. /data/ (videos/frames crudos
+# del NDA) se sigue excluyendo siempre.
+/data/
+.env
+.env.*
+.git/
+frontend/
+backend/notebooks/
+backend/tests/
+notebooks/
+report/
+docs/
+*.md
+**/node_modules
+**/__pycache__

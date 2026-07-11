@@ -96,6 +96,61 @@ cd frontend && npm install && npm run dev                      # http://localhos
 En dev, Vite proxea `/api` al backend (mismo patrón que nginx en producción), por lo
 que el código del frontend usa rutas relativas `/api/...` idénticas en ambos entornos.
 
+## Deploy a AWS Elastic Beanstalk
+
+El stack completo (api, frontend, mlflow, prometheus, grafana) se despliega en un único
+EC2 vía la plataforma **Docker** de Elastic Beanstalk (no ECS-managed), que ejecuta
+`docker compose up --build` en la instancia igual que en local. `api` y `frontend` se
+buildean localmente y se pushean a ECR; `mlflow` se buildea en la propia instancia
+(no tiene ECR repo propio); `prometheus`/`grafana` pullean sus imágenes públicas.
+
+Requisitos: credenciales AWS válidas (`aws sts get-caller-identity`), EB CLI (`eb
+--version`), Docker con soporte `buildx`, y un modelo entrenado en `models/v0` (y
+`models/clips-v1` para el flujo de video) — el `Dockerfile.deploy.api` lo hornea en la
+imagen porque `models/` está gitignored (NDA) y en EB no hay host para bind-mountearlo.
+
+**Nota — cuenta AWS Academy Learner Lab:** esta cuenta (`625067806263`) es un Learner
+Lab (rol asumido `voclabs`), que **no permite crear ni modificar roles IAM**
+(`iam:AttachRolePolicy`/`CreateRole` dan `AccessDenied`). El lab ya provee `LabRole` /
+`LabInstanceProfile` con `AmazonEC2ContainerRegistryReadOnly` adjunto y con
+`elasticbeanstalk.amazonaws.com` habilitado en su trust policy, así que sirven como
+instance profile y service role de EB sin tocar IAM. Además las credenciales son
+temporales (`ASIA...` + session token) y expiran cada pocas horas: si un comando
+`aws`/`eb` empieza a fallar con `ExpiredToken`, hay que pedir credenciales nuevas del
+panel del lab y actualizar `~/.aws/credentials`.
+
+```bash
+# 1. Login + build + push de api/frontend a ECR (forzar linux/amd64: las instancias
+#    EC2 son x86_64, builds locales en Apple Silicon son arm64 por default)
+aws ecr get-login-password --region us-east-1 \
+  | docker login --username AWS --password-stdin 625067806263.dkr.ecr.us-east-1.amazonaws.com
+
+docker buildx build --platform linux/amd64 -f Dockerfile.deploy.api \
+  -t 625067806263.dkr.ecr.us-east-1.amazonaws.com/soccer-net/api:latest --push .
+
+docker buildx build --platform linux/amd64 \
+  -t 625067806263.dkr.ecr.us-east-1.amazonaws.com/soccer-net/frontend:latest --push ./frontend
+
+# 2. Setup de EB (una sola vez): reusa LabRole/LabInstanceProfile (no crear IAM nuevo)
+eb init -p docker soccer-net --region us-east-1
+eb create soccer-net-prod --single --instance-type t3.medium \
+  --instance-profile LabInstanceProfile --service-role LabRole
+
+# 3. Deploy (usa docker-compose.prod.yml, ver scripts/deploy_eb.sh)
+scripts/deploy_eb.sh soccer-net-prod
+```
+
+`docker-compose.prod.yml` es la variante de deploy de `docker-compose.yml`: `api`/
+`frontend` usan `image:` (ECR) en vez de `build:`, `frontend` publica `80:80` (el único
+puerto que EB abre por default; `.ebextensions/security-group.config` abre además 5500 y
+3000 para MLflow/Grafana), y `api` no monta `./models` porque ya viene horneado. El
+script `scripts/deploy_eb.sh` hace el swap temporal `docker-compose.prod.yml` →
+`docker-compose.yml` (staged en git, nunca commiteado) y lo restaura al terminar, para no
+pisar el archivo de dev.
+
+**El entorno EB genera costo mientras esté prendido** (~US$30/mes con `t3.medium`
+24/7). Terminarlo cuando no se esté usando: `eb terminate soccer-net-prod`.
+
 ## Estructura
 
 ```
