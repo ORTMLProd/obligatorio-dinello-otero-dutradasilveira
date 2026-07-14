@@ -943,3 +943,369 @@ video y que el modelo prediga el evento con explicación visual— quedó funcio
 Sub-proyecto desarrollado con Claude Code (mockup, spec, plan, implementación TDD/Vitest vía
 subagentes, verificación end-to-end con Playwright). El estudiante eligió la dirección visual y la
 estrategia de testing, y validó el resultado; es responsable de poder defenderlo.
+
+---
+
+## 2026-07-11 — Deploy a AWS Elastic Beanstalk (infraestructura de despliegue)
+
+### Qué se hizo
+Se prepararon los artefactos para desplegar el stack completo (api, frontend, mlflow,
+prometheus, grafana) en un entorno de AWS Elastic Beanstalk (EB), sin tocar el flujo de
+desarrollo local:
+
+- `Dockerfile.deploy.api` (raíz del repo): variante de `backend/Dockerfile` que además
+  hornea el modelo entrenado (`models/v0`, `models/clips-v1`) dentro de la imagen, con su
+  propio `Dockerfile.deploy.api.dockerignore` que habilita `/models/` solo para este build
+  (el `.dockerignore` genérico de la raíz lo excluye como defensa en profundidad del NDA).
+- `docker-compose.prod.yml`: variante de deploy del `docker-compose.yml` de dev — `api` y
+  `frontend` usan `image:` apuntando a ECR en vez de `build:`, `frontend` publica `80:80`
+  (único puerto que EB abre por default), y `api` no monta `./models` porque ya viene
+  horneado en la imagen.
+- `.ebextensions/security-group.config`: abre los puertos 5500 (MLflow) y 3000 (Grafana)
+  en el security group que EB crea, además del 80.
+- `scripts/deploy_eb.sh`: automatiza el swap seguro `docker-compose.prod.yml` →
+  `docker-compose.yml` (staged en git, nunca commiteado, restaurado con `trap` aunque el
+  deploy falle) porque el EB CLI empaqueta el índice de git, no el working tree.
+- Sección "Deploy a AWS Elastic Beanstalk" en el README con el flujo completo
+  (login ECR → build/push multi-arch → setup IAM/EB → deploy → validación → `eb
+  terminate`).
+
+Todavía **no se ejecutó ningún `eb create`/`eb deploy` real**: las credenciales AWS del
+entorno estaban inválidas (`InvalidClientTokenId`) al momento de esta sesión, y no existe
+un `models/v0` entrenado localmente para hornear. Los archivos quedan listos para correr
+en cuanto se resuelvan esos dos bloqueadores.
+
+**Actualización (misma sesión):** al validar credenciales nuevas se detectó que la cuenta
+`625067806263` es un **AWS Academy Learner Lab** (rol asumido `voclabs`), no una cuenta
+IAM normal. `iam:AttachRolePolicy`/`CreateRole` devuelven `AccessDenied` — el plan
+original de crear/adjuntar la policy `AmazonEC2ContainerRegistryReadOnly` a
+`aws-elasticbeanstalk-ec2-role` no es viable ahí. El lab ya provee `LabRole` /
+`LabInstanceProfile` con esa policy adjunta y con `elasticbeanstalk.amazonaws.com`
+habilitado en su trust policy, así que el README se corrigió para usarlos directo
+(`eb create ... --instance-profile LabInstanceProfile --service-role LabRole`) sin tocar
+IAM. Además las credenciales del lab son temporales y expiran cada pocas horas.
+
+### Por qué se hizo así
+- **Plataforma Docker (no ECS-managed) de EB, vía `docker-compose.yml`.** Investigado
+  contra la documentación oficial de AWS: el multicontainer Docker sobre AL1
+  (`Dockerrun.aws.json` v2) está retirado desde 2022; su sucesor "ECS on AL2023" exige
+  imágenes prebuilds para *todos* los servicios (no permite `build:` en el propio
+  despliegue). La plataforma Docker "plana" sí soporta `docker compose up --build`
+  directo en la instancia — igual que en local — lo que nos permite mezclar servicios con
+  `image:` (api/frontend, desde ECR) y servicios con `build:` (mlflow, sin ECR repo
+  propio) sin duplicar infraestructura para 3 servicios que no lo necesitan.
+- **Modelo horneado en la imagen, no traído de S3 en runtime.** `models/` está gitignored
+  y se bind-mountea en local a propósito (permite reentrenar sin rebuildear la imagen).
+  En EB no hay host que lo provea. Se evaluó traerlo de S3 al arrancar el contenedor
+  (más "productivo", separa modelo de imagen igual que en local) pero se descartó por
+  tiempo/alcance: exige bucket S3, política IAM adicional para la instancia, y tocar el
+  entrypoint del backend. Hornear el modelo en una imagen de *deploy* separada
+  (`Dockerfile.deploy.api`, no se toca `backend/Dockerfile` de dev) resuelve el problema
+  con cero infraestructura nueva; el costo es tener que reconstruir y re-pushear la
+  imagen en cada reentrenamiento — aceptable para la cadencia de este obligatorio.
+- **`Dockerfile.deploy.api.dockerignore` en vez de editar el `.dockerignore` de la raíz.**
+  El `.dockerignore` genérico excluye `/models/` como defensa en profundidad del NDA
+  (evitar que builds con contexto raíz filtren accidentalmente contenido gitignored).
+  BuildKit permite un ignore-file específico por Dockerfile que pisa al genérico solo
+  para ese build — mantiene la protección general intacta y hace explícita, en un único
+  lugar, la única excepción deliberada.
+- **Single-instance, sin load balancer.** Decisión tomada con el usuario: es una demo
+  académica, no un servicio con SLA; evita el costo fijo de un ALB.
+- **Swap de compose vía `git add` (staged, sin commit) en vez de mantener un solo
+  `docker-compose.yml` con `image:`/`build:` mezclados condicionalmente.** Compose no
+  soporta bien "usar `build:` en local, `image:` en EB" desde el mismo archivo sin
+  trucos frágiles (variables de entorno para pisar claves). Dos archivos explícitos +
+  un script que hace el swap transitorio es más legible y así el archivo que ve un
+  lector de dev nunca contiene referencias a ECR.
+
+### Concepto del curso relacionado
+- **Reproducibilidad de deploy / training-serving skew:** la misma imagen versionada en
+  ECR (`:latest` + tag por commit) que se prueba local es la que corre en AWS — no hay
+  un segundo build "de prod" con código distinto.
+- **Trazabilidad de ML (Electivo 1):** las imágenes en ECR quedan versionadas junto al
+  registro de modelos en MLflow; el tag por commit permite correlacionar una imagen
+  desplegada con el commit exacto que la generó.
+- **IaC básica:** `.ebextensions/*.config` es infraestructura declarada como código
+  (CloudFormation embebido) en vez de clicks manuales en la consola.
+- **Gestión de permisos (IAM) en un entorno restringido:** el instance profile de EB
+  necesita la policy `AmazonEC2ContainerRegistryReadOnly` para poder autenticar contra
+  ECR privado sin embeber credenciales en la imagen. En una cuenta IAM normal esa policy
+  se adjuntaría explícitamente (EB ya no crea `aws-elasticbeanstalk-ec2-role` por
+  default); en esta cuenta (Learner Lab, permisos IAM de solo lectura) la lección es
+  distinta: identificar y reusar el rol preexistente con los permisos correctos
+  (`LabRole`) en vez de asumir que uno puede crear infraestructura IAM propia.
+
+### Requerimiento de la consigna que cubre
+- Extiende el mínimo **"stack completo en Docker Compose"** (Fase 2) a un despliegue real
+  en la nube, más allá de `localhost`.
+- Apoya el electivo **"Trazabilidad de ML"** (manifiestos + imágenes versionadas en un
+  registro, no solo el Model Registry de MLflow).
+
+### Alternativas consideradas y descartadas
+- **ECS managed Docker platform + `Dockerrun.aws.json` v2** → descartado: exige todas las
+  imágenes prebuilds (no serviría para `mlflow`, que no tiene ECR repo), y es más
+  infraestructura (cluster ECS, task definitions) de la que necesita una demo académica
+  de una sola instancia.
+- **Fetch del modelo desde S3 al iniciar el contenedor** → descartado por ahora (ver
+  arriba); queda anotado como mejora natural si el proyecto necesitara reentrenar sin
+  rebuildear la imagen de deploy.
+- **Load-balanced + auto-scaling** → descartado: sobra para el caso de uso (demo/entrega),
+  agrega costo fijo (ALB) sin beneficio.
+
+### Referencias al código
+- `Dockerfile.deploy.api`, `Dockerfile.deploy.api.dockerignore`, `docker-compose.prod.yml`,
+  `.ebextensions/security-group.config`, `scripts/deploy_eb.sh`, sección "Deploy a AWS
+  Elastic Beanstalk" en `README.md`.
+
+### Uso de IA generativa
+Investigación de la documentación oficial de AWS Elastic Beanstalk (estado de las
+plataformas Docker, requisitos de `Dockerrun.aws.json` v2 vs. `docker-compose.yml`,
+permisos IAM para ECR) y redacción de los artefactos de deploy con Claude Code, en modo
+plan con aprobación explícita del usuario en las decisiones de arquitectura (scope del
+stack, estrategia de modelo, topología del entorno). Pendiente de ejecución real por el
+estudiante una vez resueltos los bloqueadores de credenciales y modelo entrenado.
+
+---
+
+## 2026-07-11 — Primer entrenamiento real del baseline v0 (para desbloquear el deploy)
+
+### Qué se probó
+Se corrió por primera vez en esta máquina el pipeline completo de datos + entrenamiento
+que hasta ahora solo existía como código (nunca se había ejecutado localmente): descarga
+de SoccerNet (16 partidos de `england_epl`, labels + features ResNet pre-extraídas +
+videos 224p, `configs/dataset.yaml`), construcción del manifest de ventanas
+(`src.data.build_dataset`), y entrenamiento del baseline v0 (`src.models.train`,
+LogReg + XGBoost, late fusion tabular ⊕ embedding ResNet pooled).
+
+**Resultado — manifest:** 1140 ventanas de 16 partidos, splits por `game_id`
+(train=762, val=192, test=186), clases `{background: 760, corner: 185, substitution: 86,
+card: 64, goal: 45}` (confirma el desbalance esperado, invariante 5).
+
+**Resultado — entrenamiento** (experimento MLflow `baseline-v0`, commit `d03dd9c`,
+`dataset_hash=44a977f9...`):
+
+| modelo | val macro-F1 | test macro-F1 |
+|---|---|---|
+| logistic_regression | 0.741 | **0.821** |
+| xgboost | **0.877** | 0.797 |
+
+Se exportó **xgboost** (mejor val macro-F1, criterio de selección del script) a
+`models/v0/model.joblib`. Por clase en test: `background` F1=1.00, `corner` F1=0.85,
+`substitution` F1=0.94, `card` F1=0.70, `goal` F1=0.50 (la clase más golpeada por tener
+solo 45 ejemplos en todo el dataset — esperable con 16 partidos).
+
+Es el **primer run del experimento**, no hay un baseline anterior contra el cual
+comparar — este entrenamiento *es* el baseline v0 que exige el roadmap de modelos antes
+de cualquier mejora.
+
+### Por qué se hizo así / bloqueadores resueltos en el camino
+- **`uv` no estaba instalado en la máquina** (proyecto trabajado hasta ahora desde otra
+  máquina/sesión) → se instaló vía `brew install uv`.
+- **`SOCCERNET_PASSWORD` no estaba seteada.** Se decidió con el usuario pedirle la
+  contraseña del NDA para bajar el dataset completo (labels+features+videos) en vez de
+  deshabilitar `clips.enabled` temporalmente solo para desbloquear v0 — así de paso queda
+  el material para entrenar `clips-v1` (modelo de video) más adelante. El usuario la
+  seteó él mismo en `.env` sin pegarla en el chat (mismo criterio de higiene que con las
+  credenciales AWS).
+- **XGBoost no cargaba (`libxgboost.dylib` no encontraba `libomp.dylib`)**: falta común en
+  macOS con Homebrew — se resolvió con `brew install libomp` (xgboost linkea contra esa
+  lib para paralelismo OpenMP, no viene embebida en el wheel de macOS).
+- Se corrió el training tal cual está en `configs/train.yaml`, sin tocar hiperparámetros:
+  el objetivo de esta corrida no es optimizar sino **tener un `models/v0` real para poder
+  hornearlo en la imagen de deploy** (ver entrada anterior de esta bitácora).
+
+### Concepto del curso relacionado
+- **Invariante 1 (anti data-leakage):** splits por `game_id`, verificado en el summary del
+  build (`report/dataset_summary.json`) — ningún partido se repite entre train/val/test.
+- **Invariante 5 (desbalance de clases):** se reportan P/R/F1 por clase + PR-AUC en las 5
+  clases, nunca accuracy sola; el desbalance real (760 `background` vs. 45 `goal`) se ve
+  directo en los números de soporte (`n=`) por clase.
+- **Invariante 6 (determinismo):** `seed=42` logueado como param en MLflow junto con el
+  commit (`mlflow.source.git.commit`) y el hash del dataset — cualquiera puede reproducir
+  exactamente este run.
+- **Reproducibilidad de entorno:** el problema de `libomp` es un caso concreto de
+  "funciona en mi máquina" — la imagen Docker de la API (que sí corre en Linux, con
+  xgboost linkeado distinto) no tiene este problema; es puramente del entorno de
+  desarrollo local en macOS.
+
+### Requerimiento de la consigna que cubre
+- Cierra el mínimo **"v0 baseline debe existir antes de cualquier mejora"** del roadmap de
+  modelos — hasta ahora era código sin ejecutar, ahora hay un `models/v0` real.
+- Alimenta directamente el mínimo de **Fase 2 (baseline end-to-end)**: sin esto, el deploy
+  a AWS solo podía mostrar `/predict` devolviendo 503.
+
+### Decisión
+**Adoptar.** Este es el primer y único baseline v0 disponible; se usa tal cual para
+hornear `Dockerfile.deploy.api` y desplegar a Elastic Beanstalk. Iterar sobre
+hiperparámetros/features queda para la Fase 3 (fuera del alcance de esta sesión, que
+prioriza cerrar el ciclo de deploy).
+
+### Referencias al código
+- `configs/dataset.yaml`, `configs/train.yaml`, `backend/src/data/{download,build_dataset}.py`,
+  `backend/src/models/train.py`. Artefactos generados (gitignored): `data/processed/manifest.parquet`,
+  `data/processed/resnet_pooled.npy`, `models/v0/model.joblib`. Resumen:
+  `report/dataset_summary.json`. MLflow: experimento `baseline-v0`, run `xgboost`
+  (run_id `138ed32d8d0041248919f583adf605a6`).
+
+### Cierre didáctico
+- El baseline v0 no es "el mejor modelo posible": es la evidencia mínima de que el ciclo
+  dato→feature→modelo→métrica cierra, tal como pide el criterio de corrección del
+  obligatorio. Con 16 partidos y clases con 45-86 ejemplos, las métricas van a ser
+  ruidosas — eso es esperable y no invalida el ciclo.
+- XGBoost ganó por val macro-F1 pero perdió contra LogReg en test macro-F1 (0.797 vs
+  0.821): con datasets chicos y clases minoritarias, la elección "mejor modelo" por una
+  sola corrida puede no ser estable — es un punto de discusión válido para el informe
+  final (¿convendría selección por CV en vez de un único split val?).
+- El error de `libomp` es un buen ejemplo real de por qué el modelo que sirve la API corre
+  en Docker (Linux) y no depende del entorno de desarrollo de quien entrena: la imagen no
+  hereda estos problemas de librerías nativas del host.
+
+### Uso de IA generativa
+Pipeline ejecutado con Claude Code (skill `experimento` del proyecto): decisiones de
+alcance (contraseña NDA, camino con clips habilitado) tomadas junto con el usuario;
+diagnóstico y resolución de los tres bloqueadores del entorno (uv, password, libomp) y
+verificación de los tags/métricas en MLflow hechos por el asistente. El usuario proveyó la
+contraseña del NDA de forma segura (directo en `.env`) y es responsable de poder explicar
+los resultados y la decisión de adopción.
+
+---
+
+## 2026-07-11 — Deploy a AWS Elastic Beanstalk: primera ejecución real
+
+### Qué se hizo
+Con `models/v0` ya entrenado, se ejecutó el deploy planeado en la entrada anterior:
+
+1. Build + push a ECR de `soccer-net/api` (con el modelo horneado, `Dockerfile.deploy.api`)
+   y `soccer-net/frontend`, tageadas `:latest` y `:d03dd9c` (commit).
+2. `eb init -p docker soccer-net --region us-east-1` + `eb create soccer-net-prod --single
+   --instance_type t3.medium --instance_profile LabInstanceProfile --service-role LabRole`.
+3. **`eb create` funcionó al primer intento** (`Health: Green` en ~5 minutos) — el swap
+   temporal `docker-compose.yml` ↔ `docker-compose.prod.yml` vía dos commits (uno de ida,
+   uno de vuelta alrededor del `eb create`) resultó necesario porque `eb create`, a
+   diferencia de `eb deploy`, no soporta `--staged`.
+4. Validación end-to-end: frontend (200), `/api/health`, `/api/model-info` (modelo XGBoost
+   cargado, coincide con el run entrenado), **`/api/predict` con un payload real devolvió
+   una predicción + explicaciones SHAP** — el ciclo completo cierra en la nube. Grafana
+   accesible. MLflow devolvía 403.
+5. MLflow 403 resuelto en dos iteraciones: la protección anti DNS-rebinding de MLflow 3
+   (`--allowed-hosts`) necesitaba explícitamente el patrón de dominio de EB, y **además**
+   el puerto (`*.elasticbeanstalk.com:5500`) porque el Host header del cliente lo incluye
+   y el wildcard no lo cubre solo. Cada fix se validó leyendo los logs reales de la
+   instancia (`eb logs --all`) en vez de asumir — el primer intento parecía razonable
+   pero los logs mostraron que el middleware quedaba activo con el allowlist "correcto"
+   y aun así rechazaba, lo que apuntó al problema real (puerto en el Host header).
+6. **Bloqueado a mitad del segundo redeploy**: la sesión del AWS Academy Learner Lab
+   terminó (policy de deny explícito `voc-cancel-cred` aplicada por la plataforma del
+   lab), cortando todo acceso AWS (`ec2:DescribeInstances`, `s3:CreateBucket`, etc.) justo
+   después de que el redeploy con el segundo fix de MLflow completara exitosamente según
+   los logs de EB. No se pudo re-verificar el estado final de MLflow tras ese último
+   redeploy. Pendiente: retomar con credenciales nuevas del lab y confirmar `eb status` +
+   los 4 endpoints.
+
+### Por qué se hizo así
+- **Verificar con logs reales, no asumir.** El primer intento de arreglar MLflow (agregar
+  `*.elasticbeanstalk.com` a `--allowed-hosts`) era razonable pero insuficiente. En vez de
+  suponer que "seguro es algo de la imagen vieja" o iterar a ciegas, se leyeron los logs de
+  `docker compose logs` en la instancia (vía `eb logs --all`) y se confirmó que el
+  middleware SÍ tenía el allowlist nuevo aplicado — lo que descartó la hipótesis de imagen
+  desactualizada y señaló el problema real (el puerto en el Host header).
+- **CPU-only torch (bug encontrado durante el build, no planeado).** Ver detalle en el
+  commit `fix: resolver torch/torchvision a wheels CPU-only en Linux` — reducir la imagen
+  de api de una descarga con timeout (>2GB de CUDA) a ~1GB, sin tocar la resolución local
+  en macOS (marker `sys_platform == 'linux'`).
+- **Compute local para builds (buildx + QEMU) tuvo fricción real:** dos rondas de "no
+  space left on device" en el disco virtual de Docker Desktop (58.6GB fijos), resueltas
+  liberando build cache viejo. Vale la pena documentarlo porque es una limitación de
+  correr el pipeline de deploy desde una laptop, no del diseño de la infra en sí.
+
+### Concepto del curso relacionado
+- **Verificación empírica sobre suposición:** ante un fix que "debería funcionar" y no
+  funciona, la respuesta correcta es leer los logs del sistema real (la instancia EB) en
+  vez de iterar a ciegas sobre hipótesis — mismo principio que depurar un modelo mirando
+  las predicciones reales en vez de asumir por qué falla.
+- **Reproducibilidad de entorno (Linux vs. macOS):** el problema de torch CUDA solo
+  aparece al cross-buildear para Linux (target real de producción) — otro ejemplo de por
+  qué el entorno de serving no puede inferirse del entorno de desarrollo.
+- **Infraestructura efímera (AWS Academy Lab):** el corte de sesión a mitad de un deploy
+  es justamente el tipo de evento que un pipeline de CI/CD real necesita tolerar
+  (reintentable, idempotente) — `scripts/deploy_eb.sh` y el flujo de `eb deploy` ya son
+  seguros para reintentar sin dejar el repo en un estado inconsistente (el swap se
+  revierte siempre, incluso si el deploy en sí falla).
+
+### Requerimiento de la consigna que cubre
+- Extiende el mínimo end-to-end (Fase 2) a un despliegue real verificado con una
+  predicción real de punta a punta, no solo "la infra levanta".
+
+### Decisión
+**En progreso, no cerrado.** El entorno EB llegó a `Health: Green` con las 4 piezas
+funcionando (frontend, api con predicción real, grafana; mlflow con el fix aplicado pero
+sin re-verificar tras el corte de sesión). Se retoma en la próxima sesión con credenciales
+nuevas del lab.
+
+### Referencias al código
+- Commits de esta sesión (deploy real): `f41ef61` (swap temporal), `751663e` (revert),
+  `e40b082` y `0e5dc6f` (fixes de MLflow `--allowed-hosts`).
+- `mlflow/Dockerfile`, `scripts/deploy_eb.sh`.
+
+### Uso de IA generativa
+Ejecución completa (builds, `eb create`/`eb deploy`, diagnóstico de los 403 de MLflow vía
+logs de la instancia, diagnóstico del corte de sesión del lab) hecha por Claude Code. El
+usuario aprobó explícitamente el paso de `eb create` antes de que se ejecutara (acción
+facturable) y proveyó la contraseña NDA y las credenciales AWS de forma directa (sin
+pegarlas en el chat cuando fue posible). Pendiente de retomar y cerrar la validación final.
+
+---
+
+## 2026-07-11 — Deploy a AWS EB: cierre (instancia rota diagnosticada y reemplazada)
+
+### Qué se hizo
+Al recuperar acceso a AWS tras el reinicio del lab, el entorno seguía en `Health: No
+Data` en vez de recuperarse solo. Se diagnosticó **sin usar SSH** (no había keypair
+configurado) vía **AWS Systems Manager Run Command** (`aws ssm send-command`,
+disponible porque `LabRole` ya tenía `AmazonSSMManagedInstanceCore` adjunta):
+`docker.service` estaba `inactive (dead)` y no existía ni un solo archivo de log de
+`cfn-init`/`eb-engine` en la instancia — el bootstrap murió en el primer paso (la
+descarga del script de arranque de EB desde S3), exactamente en la ventana de tiempo en
+que el deny policy `voc-cancel-cred` del lab estaba activo. La instancia nunca llegó a
+tener estado ni aplicación corriendo, así que se terminó manualmente
+(`aws ec2 terminate-instances`) para que el Auto Scaling Group de EB lanzara una
+reemplazante — que bootstrapeó limpio en ~3 minutos con la sesión del lab ya estable.
+
+**Resultado final, verificado con requests reales:** frontend (200), `/api/health`,
+`/api/model-info` (modelo cargado), **`/api/predict` con un payload real devuelve
+predicción + SHAP**, **MLflow (5500): 200**, **Grafana (3000): 200**. El deploy a AWS
+Elastic Beanstalk queda cerrado y funcionando de punta a punta.
+
+### Por qué se hizo así
+- **Diagnosticar antes de reintentar a ciegas.** Ante "no se recupera solo", la tentación
+  fácil es simplemente reintentar `eb deploy` repetidas veces. En cambio se usó SSM Run
+  Command para *ver* el estado real de la instancia (servicios, logs) y confirmar la
+  causa raíz exacta antes de actuar — mismo principio que con el diagnóstico de MLflow.
+- **Terminar en vez de esperar a que se autorepare.** Como `docker.service` nunca arrancó,
+  no había ningún proceso vivo que pudiera reintentar el bootstrap por su cuenta; el único
+  mecanismo de recuperación real en una arquitectura de Auto Scaling Group es reemplazar
+  la instancia. Se confirmó con el usuario antes de terminarla (acción destructiva) aunque
+  el riesgo era bajo (instancia sin estado ni aplicación corriendo).
+
+### Concepto del curso relacionado
+- **Infraestructura efímera y auto-healing:** un ASG de una sola instancia igual da
+  resiliencia ante un fallo de arranque, siempre que alguien (o un proceso automatizado)
+  dispare el reemplazo — acá se hizo manual, pero el patrón es el mismo que un health
+  check automatizado en un pipeline real.
+- **Observabilidad sin acceso directo:** SSM Run Command permitió diagnosticar sin abrir
+  puertos SSH ni generar un keypair nuevo — superficie de ataque mínima, resuelto con los
+  permisos que ya traía `LabRole`.
+
+### Decisión
+**Cerrado.** El entorno `soccer-net-prod` está en `Health: Ok`, con los 5 servicios del
+stack corriendo y verificados con tráfico real. URL:
+`soccer-net-prod.eba-cyqdfnnq.us-east-1.elasticbeanstalk.com`.
+
+### Referencias al código
+- Sin cambios de código en esta entrada (fue diagnóstico + operación de infraestructura).
+  Comandos documentados en el README ("Deploy a AWS Elastic Beanstalk").
+
+### Uso de IA generativa
+Diagnóstico vía SSM y decisión de terminar la instancia hechos por Claude Code, con
+confirmación explícita del usuario antes de la acción destructiva (`terminate-instances`).
+Validación final de los 5 endpoints hecha por el asistente con requests reales.

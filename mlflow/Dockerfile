@@ -12,8 +12,14 @@ EXPOSE 5000
 # --serve-artifacts + --artifacts-destination makes the server PROXY artifact upload/download
 # over HTTP (artifact URIs become mlflow-artifacts:/...). Without this the client would try to
 # write to the server's local artifact path on its own filesystem and fail.
+# --allowed-hosts: MLflow 3 rejects requests whose Host header isn't localhost/private-IP by
+# default (anti DNS-rebinding). Add localhost (local docker-compose) and the EB domain pattern
+# (deploy) explicitly, or the UI 403s when accessed via the public *.elasticbeanstalk.com URL.
+# The Host header includes the port when it's non-default (e.g. "...elasticbeanstalk.com:5500"),
+# and the wildcard match doesn't strip it — so both the bare and ":5500" patterns are needed.
 CMD ["mlflow", "server", \
      "--host", "0.0.0.0", "--port", "5000", \
      "--backend-store-uri", "sqlite:////mlflow/mlflow.db", \
      "--serve-artifacts", \
-     "--artifacts-destination", "/mlflow/artifacts"]
+     "--artifacts-destination", "/mlflow/artifacts", \
+     "--allowed-hosts", "localhost,127.0.0.1,*.elasticbeanstalk.com,*.elasticbeanstalk.com:5500"]

@@ -57,6 +57,19 @@ ml = [
 [tool.uv]
 package = false
 
+# CPU-only torch/torchvision on Linux (container builds, incl. EB deploy): the default
+# PyPI wheels for linux pull ~2GB of nvidia-* CUDA deps we never use (inference is CPU,
+# OMP_NUM_THREADS=1). macOS dev keeps resolving from PyPI as-is (already CPU/MPS, no CUDA
+# variant exists there).
+[[tool.uv.index]]
+name = "pytorch-cpu"
+url = "https://download.pytorch.org/whl/cpu"
+explicit = true
+
+[tool.uv.sources]
+torch = [{ index = "pytorch-cpu", marker = "sys_platform == 'linux'" }]
+torchvision = [{ index = "pytorch-cpu", marker = "sys_platform == 'linux'" }]
+
 [tool.ruff]
 line-length = 100
 target-version = "py312"
