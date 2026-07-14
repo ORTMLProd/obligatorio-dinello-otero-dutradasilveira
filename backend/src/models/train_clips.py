@@ -47,6 +47,25 @@ def evaluate_clips(
     return compute_metrics(y_true, proba.argmax(axis=1), proba, classes)
 
 
+def _build_optimizer(
+    model: nn.Module, lr: float, backbone_lr: float | None
+) -> torch.optim.Optimizer:
+    """Adam over trainable params. When ``backbone_lr`` is set (fine-tuning), the unfrozen
+    backbone params get their own (lower) LR while the head keeps ``lr``."""
+    if backbone_lr is None:
+        trainable = [p for p in model.parameters() if p.requires_grad]
+        return torch.optim.Adam(trainable, lr=lr)
+    backbone_params = [
+        p for n, p in model.named_parameters() if p.requires_grad and "backbone" in n
+    ]
+    head_params = [
+        p for n, p in model.named_parameters() if p.requires_grad and "backbone" not in n
+    ]
+    return torch.optim.Adam(
+        [{"params": head_params, "lr": lr}, {"params": backbone_params, "lr": backbone_lr}]
+    )
+
+
 def fit(
     model: nn.Module,
     train_loader: DataLoader,
@@ -57,15 +76,19 @@ def fit(
     lr: float,
     class_weights: torch.Tensor,
     device: torch.device,
+    backbone_lr: float | None = None,
 ) -> tuple[nn.Module, float]:
-    """Train the head with early stopping on validation macro-F1. Returns (best_model, best_f1)."""
+    """Train with early stopping on validation macro-F1. Returns (best_model, best_f1).
+
+    Trains the head by default; when ``backbone_lr`` is given, also the unfrozen backbone
+    (fine-tuning) at that lower LR. Prints per-epoch val macro-F1 so long runs are monitorable.
+    """
     model.to(device)
-    trainable = [p for p in model.parameters() if p.requires_grad]
-    optimizer = torch.optim.Adam(trainable, lr=lr)
+    optimizer = _build_optimizer(model, lr, backbone_lr)
     loss_fn = nn.CrossEntropyLoss(weight=class_weights.to(device))
 
     best_f1, best_state, since = -1.0, copy.deepcopy(model.state_dict()), 0
-    for _epoch in range(epochs):
+    for epoch in range(epochs):
         model.train()
         for clips, labels in train_loader:
             optimizer.zero_grad()
@@ -73,12 +96,19 @@ def fit(
             loss.backward()
             optimizer.step()
         val_f1 = evaluate_clips(model, val_loader, classes, device)["macro_f1"]
-        if val_f1 > best_f1:
+        improved = val_f1 > best_f1
+        if improved:
             best_f1, best_state, since = val_f1, copy.deepcopy(model.state_dict()), 0
         else:
             since += 1
-            if since >= patience:
-                break
+        print(
+            f"  epoch {epoch + 1:2d}/{epochs}  val_macroF1={val_f1:.3f}"
+            f"  best={best_f1:.3f}{'  *' if improved else ''}",
+            flush=True,
+        )
+        if since >= patience:
+            print(f"  early stopping (no mejora en {patience} épocas)", flush=True)
+            break
     model.load_state_dict(best_state)
     return model, best_f1
 
@@ -149,14 +179,26 @@ def run(cfg: ClipTrainConfig) -> ClipModelMeta:
     best_val = -1.0
     results: dict[str, float] = {}
 
-    for augment in (False, True):
-        name = "clips-aug" if augment else "clips-noaug"
+    # Fine-tuning is the expensive experiment; run only the winning (augmented) variant and
+    # compare against the frozen baseline already in MLflow. Frozen training keeps the
+    # no-aug/aug pair so the augmentation delta stays measured.
+    variants = (True,) if cfg.finetune else (False, True)
+    backbone_lr = cfg.finetune_lr if cfg.finetune else None
+    for augment in variants:
+        suffix = "-ft" if cfg.finetune else ""
+        name = ("clips-aug" if augment else "clips-noaug") + suffix
+        print(f"\n=== entrenando {name} (finetune={cfg.finetune}) ===", flush=True)
         train_loader = _make_loader(splits["train"], cfg, classes, augment, processed_dir, True)
         val_loader = _make_loader(splits["val"], cfg, classes, False, processed_dir, False)
         test_loader = _make_loader(splits["test"], cfg, classes, False, processed_dir, False)
 
         model = build_clip_model(
-            len(classes), cfg.head.hidden, cfg.head.dropout, cfg.pooling, cfg.backbone
+            len(classes),
+            cfg.head.hidden,
+            cfg.head.dropout,
+            cfg.pooling,
+            cfg.backbone,
+            finetune=cfg.finetune,
         )
         model, val_f1 = fit(
             model,
@@ -168,6 +210,7 @@ def run(cfg: ClipTrainConfig) -> ClipModelMeta:
             cfg.train.lr,
             weights,
             device,
+            backbone_lr=backbone_lr,
         )
         test_metrics = evaluate_clips(model, test_loader, classes, device)
         results[name] = test_metrics["macro_f1"]
@@ -179,6 +222,8 @@ def run(cfg: ClipTrainConfig) -> ClipModelMeta:
                     "pooling": cfg.pooling,
                     "k": cfg.k,
                     "augment": augment,
+                    "finetune": cfg.finetune,
+                    "finetune_lr": cfg.finetune_lr if cfg.finetune else None,
                     "lr": cfg.train.lr,
                     "epochs": cfg.train.epochs,
                     "batch_size": cfg.train.batch_size,
@@ -221,13 +266,20 @@ def run(cfg: ClipTrainConfig) -> ClipModelMeta:
                 normalize_std=cfg.normalize.std,
                 model_version=f"clips-v1-{name}",
                 metrics=test_metrics,
+                finetune=cfg.finetune,
             )
 
     assert best_meta is not None and best_model is not None
     save_clip_bundle(best_model, best_meta, cfg.paths.resolved("model_dir"))
-    delta = results.get("clips-aug", 0.0) - results.get("clips-noaug", 0.0)
-    print(f"\nno-aug test macro-F1={results.get('clips-noaug'):.3f}")
-    print(f"aug    test macro-F1={results.get('clips-aug'):.3f}  (Δ augmentation = {delta:+.3f})")
+    if cfg.finetune:
+        for run_name, f1 in results.items():
+            print(f"\n{run_name} test macro-F1={f1:.3f}")
+    else:
+        delta = results.get("clips-aug", 0.0) - results.get("clips-noaug", 0.0)
+        print(f"\nno-aug test macro-F1={results.get('clips-noaug'):.3f}")
+        print(
+            f"aug    test macro-F1={results.get('clips-aug'):.3f}  (Δ augmentation = {delta:+.3f})"
+        )
     print(f"exported best bundle (val macro-F1={best_val:.3f}) → {cfg.paths.resolved('model_dir')}")
     return best_meta
 

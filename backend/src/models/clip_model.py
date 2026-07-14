@@ -62,6 +62,7 @@ class ClipClassifier(nn.Module):
         dropout: float = 0.3,
         pooling: str = "mean",
         pretrained: bool = True,
+        finetune: bool = False,
     ) -> None:
         # Lazy import: keeps torchvision.models out of the module namespace until
         # a model is actually instantiated (avoids MPS init at collection time).
@@ -75,6 +76,14 @@ class ClipClassifier(nn.Module):
         backbone.fc = nn.Identity()
         for p in backbone.parameters():
             p.requires_grad_(False)
+        self.finetune = finetune
+        if finetune:
+            # Unfreeze the last residual block so it can learn soccer-specific features
+            # (frozen ImageNet features localise poorly — see Grad-CAM). BatchNorm keeps
+            # its frozen running stats (backbone stays in eval() via train() below) for
+            # stability on the small dataset; only layer4's weights are optimized.
+            for p in backbone.layer4.parameters():
+                p.requires_grad_(True)
         backbone.eval()
         self.backbone = backbone
         self.pooling = pooling
@@ -95,8 +104,11 @@ class ClipClassifier(nn.Module):
         # clips: (B, K, 3, H, W)
         b, k = clips.shape[0], clips.shape[1]
         frames = clips.reshape(b * k, *clips.shape[2:])
-        with torch.no_grad():
-            feats = self.backbone(frames)  # (B*K, 512)
+        if self.finetune:
+            feats = self.backbone(frames)  # grad flows to the unfrozen layer4
+        else:
+            with torch.no_grad():
+                feats = self.backbone(frames)  # (B*K, 512)
         feats = feats.reshape(b, k, -1)
         pooled = feats.max(dim=1).values if self.pooling == "max" else feats.mean(dim=1)
         return self.head(pooled)
@@ -109,8 +121,9 @@ def build_clip_model(
     pooling: str = "mean",
     backbone: str = "resnet18",
     pretrained: bool = True,
+    finetune: bool = False,
 ) -> ClipClassifier:
     """Build the clip classifier. Only ``resnet18`` is supported for now."""
     if backbone != "resnet18":
         raise ValueError(f"unsupported backbone {backbone!r}; only 'resnet18'")
-    return ClipClassifier(n_classes, hidden, dropout, pooling, pretrained)
+    return ClipClassifier(n_classes, hidden, dropout, pooling, pretrained, finetune)
