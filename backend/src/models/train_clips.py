@@ -126,6 +126,7 @@ def _loader_labels(loader: DataLoader) -> np.ndarray:
 def run(cfg: ClipTrainConfig) -> ClipModelMeta:
     """Train no-aug and aug runs, log to MLflow, export the best bundle. Verified live."""
     import mlflow
+    import mlflow.pytorch
 
     _seed_everything(cfg.seed)
     device = pick_device()
@@ -138,6 +139,9 @@ def run(cfg: ClipTrainConfig) -> ClipModelMeta:
 
     mlflow.set_tracking_uri(cfg.mlflow.tracking_uri)
     mlflow.set_experiment(cfg.mlflow.experiment_name)
+    # The MLflow Model Registry needs a DB-backed store (sqlite/postgres); a plain file
+    # store can't register. Guard registration the same way v0 does (see train.py).
+    is_registry_capable = not cfg.mlflow.tracking_uri.startswith("file")
     metrics_dir = cfg.paths.resolved("metrics_dir")
 
     best_meta: ClipModelMeta | None = None
@@ -194,6 +198,13 @@ def run(cfg: ClipTrainConfig) -> ClipModelMeta:
             )
             if cm is not None:
                 mlflow.log_artifact(str(cm))
+
+            # Version the image model in the MLflow Model Registry (elective: ML traceability).
+            # Logs the full nn.Module (frozen backbone + trained head); both the no-aug and aug
+            # runs become versions of the same registered model, so the elective is validated on
+            # the image model alone — no dependency on v0.
+            reg_name = "soccernet-events-clips-v1" if is_registry_capable else None
+            mlflow.pytorch.log_model(model, name="model", registered_model_name=reg_name)
 
         if val_f1 > best_val:
             best_val = val_f1
