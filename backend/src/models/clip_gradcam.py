@@ -60,10 +60,12 @@ def gradcam_clip(model, clip: torch.Tensor, class_index: int | None = None):
     cam = F.interpolate(cam, size=(h, w), mode="bilinear", align_corners=False)
     cam = cam.reshape(k, h, w).detach().cpu().numpy()
 
-    heatmaps = np.zeros_like(cam)
-    for i in range(k):
-        lo, hi = cam[i].min(), cam[i].max()
-        heatmaps[i] = (cam[i] - lo) / (hi - lo) if hi > lo else np.zeros_like(cam[i])
+    # Normalise across the WHOLE clip (shared min/max), not per frame. Per-frame min-max
+    # stretched the numerical noise of low-signal frames to full range, producing spurious
+    # blobs on frames the model barely used; a shared scale keeps those frames dim and makes
+    # the per-frame heatmaps comparable to each other.
+    lo, hi = cam.min(), cam.max()
+    heatmaps = (cam - lo) / (hi - lo) if hi > lo else np.zeros_like(cam)
     model.zero_grad(set_to_none=True)
     return heatmaps, class_index
 
