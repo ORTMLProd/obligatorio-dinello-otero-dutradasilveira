@@ -506,32 +506,6 @@ body {
 }
 
 /* ---------- modo video (Fase 3.5) ---------- */
-.modes {
-  display: flex;
-  gap: 6px;
-  margin-top: 22px;
-  background: var(--board-2);
-  border: 1px solid var(--line);
-  border-radius: 11px;
-  padding: 5px;
-  width: fit-content;
-}
-.modes button {
-  font-family: "Sora", sans-serif;
-  font-weight: 600;
-  font-size: 0.84rem;
-  padding: 8px 20px;
-  border: 0;
-  border-radius: 8px;
-  background: transparent;
-  color: var(--chalk-dim);
-  cursor: pointer;
-}
-.modes button.on {
-  background: var(--amber);
-  color: var(--board);
-}
-
 .dropzone {
   width: 100%;
   border: 1.5px dashed var(--line);
