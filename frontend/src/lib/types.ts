@@ -19,3 +19,16 @@ export interface ClipPredictResponse {
   model_version: string
   gradcam: GradcamFrame[]
 }
+
+/** Un clip dentro de un batch (sin Grad-CAM). */
+export interface ClipBatchItem {
+  filename: string | null
+  predicted_label: string
+  probabilities: Record<string, number>
+  model_version: string
+}
+
+/** Respuesta de POST /predict/clip/batch: resultados alineados con el orden de subida. */
+export interface ClipBatchResponse {
+  predictions: ClipBatchItem[]
+}
