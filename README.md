@@ -40,9 +40,6 @@ uv run --group data python -m src.data.download --config ../configs/dataset.yaml
 uv run --group data python -m src.data.splits --config ../configs/dataset.yaml
 uv run --group data python -m src.data.build_clips --config ../configs/dataset.yaml
 # → data/processed/clips_manifest.parquet + frames (gitignored)
-
-# (Opcional) baseline tabular v0, sin videos ni NDA (usa features ResNet pre-extraídas):
-uv run --group data python -m src.data.build_dataset --config ../configs/dataset.yaml
 ```
 
 ### 1. Entrenar el modelo de video (loguea a MLflow, exporta el bundle)
@@ -52,9 +49,6 @@ cd backend && uv sync --group ml
 # CNN de clips: entrena la cabeza + fine-tune de layer4, registra en el Model Registry
 # (soccernet-events-clips-v1) y exporta models/clips-v1/clip_model.pt
 uv run python -m src.models.train_clips --config ../configs/train_clips.yaml
-
-# (Opcional) baseline tabular v0 (LogReg/XGBoost + tuning Optuna):
-uv run python -m src.models.train --config ../configs/train.yaml
 ```
 
 Optimización medida (electivo): además de la data augmentation (medida dentro de
@@ -78,15 +72,14 @@ docker compose up --build
   macOS el 5000 lo toma AirPlay).
 - **Grafana:** http://localhost:3000 · **Prometheus:** http://localhost:9090 (monitoreo).
 
-La API carga los modelos de `models/` (montado read-only): `models/clips-v1` para `/predict/clip`
-y `models/v0` para `/predict`. Si un modelo no está entrenado, su endpoint responde **503**.
-Para que el training registre en el MLflow del compose: `docker compose up -d`, entrenar con
-`MLFLOW_TRACKING_URI=http://localhost:5500`, y `docker compose restart api` para recargar el
-modelo recién exportado.
+La API carga el modelo de `models/clips-v1` (montado read-only). Si no está entrenado,
+`/predict/clip` responde **503**. Para que el training registre en el MLflow del compose:
+`docker compose up -d`, entrenar con `MLFLOW_TRACKING_URI=http://localhost:5500`, y
+`docker compose restart api` para recargar el modelo recién exportado.
 
 ### Endpoints de inferencia
 
-**`POST /predict/clip`** (producto) — recibe un archivo de video (multipart, campo `video`),
+**`POST /predict/clip`** (online) — recibe un archivo de video (multipart, campo `video`),
 muestrea K frames y devuelve la clase, las probabilidades y un overlay de Grad-CAM por frame:
 
 ```bash
@@ -95,11 +88,18 @@ curl -s -F "video=@un_clip.mp4" http://localhost:8000/predict/clip
 #    "model_version": "clips-v1-clips-aug-ft", "gradcam": [{"frame_index": 0, ...}, ...]}
 ```
 
-**`POST /predict`** y **`POST /predict/batch`** (baseline tabular v0) — reciben las features
-tabulares point-in-time + el embedding ResNet **pre-extraído** (`resnet_features`, 512-d);
-`/predict/batch` recibe `{"items": [...]}` y devuelve una lista alineada. Consumir el mismo
-embedding pre-extraído (en vez de la imagen cruda) evita el *training-serving skew* en v0.
-Los mismos schemas pydantic (`extra="forbid"`) respaldan online y batch.
+**`POST /predict/clip/batch`** (batch) — recibe varios videos (multipart, campo `videos`
+repetido) y devuelve una lista alineada de resultados (clase + probabilidades por clip; sin
+Grad-CAM, que sería demasiado pesado por clip en volumen):
+
+```bash
+curl -s -F "videos=@clip_a.mp4" -F "videos=@clip_b.mp4" http://localhost:8000/predict/clip/batch
+# → {"predictions": [{"filename": "clip_a.mp4", "predicted_label": "corner", ...}, ...]}
+```
+
+El extractor (frames → CNN) es idéntico en entrenamiento y serving, por lo que no hay
+*training-serving skew*. Los schemas pydantic (`extra="forbid"`) respaldan online y batch.
+Además: `GET /health`, `GET /model-info` (versión + F1 del modelo) y `GET /metrics` (Prometheus).
 
 ### Desarrollo local (sin Docker)
 
@@ -123,10 +123,10 @@ buildean localmente y se pushean a ECR; `mlflow` se buildea en la propia instanc
 (no tiene ECR repo propio); `prometheus`/`grafana` pullean sus imágenes públicas.
 
 Requisitos: credenciales AWS válidas (`aws sts get-caller-identity`), EB CLI (`eb
---version`), Docker con soporte `buildx`, y los modelos entrenados en `models/v0` y
-`models/clips-v1` — el `Dockerfile.deploy.api` los **hornea en la imagen** (ambos, incluido
-el modelo de video para `/predict/clip`) porque `models/` está gitignored (NDA) y en EB no
-hay host para bind-mountearlo.
+--version`), Docker con soporte `buildx`, y el modelo de video entrenado en `models/clips-v1`
+— el `Dockerfile.deploy.api` lo **hornea en la imagen** (habilita `/predict/clip` y
+`/predict/clip/batch`) porque `models/` está gitignored (NDA) y en EB no hay host para
+bind-mountearlo.
 
 **Nota — cuenta AWS Academy Learner Lab:** esta cuenta (`625067806263`) es un Learner
 Lab (rol asumido `voclabs`), que **no permite crear ni modificar roles IAM**

@@ -165,7 +165,10 @@ def run(cfg: ClipTrainConfig) -> ClipModelMeta:
     classes = sorted(manifest["label"].unique().tolist())
 
     splits = {s: manifest[manifest["split"] == s] for s in ("train", "val", "test")}
-    weights = _class_weights(splits["train"]["label"].to_numpy(), classes)
+    train_labels = splits["train"]["label"].to_numpy()
+    weights = _class_weights(train_labels, classes)
+    # Train-split class distribution → drift baseline for the monitoring (Fase 3.4).
+    train_ratio = {c: float((train_labels == c).mean()) for c in classes}
 
     mlflow.set_tracking_uri(cfg.mlflow.tracking_uri)
     mlflow.set_experiment(cfg.mlflow.experiment_name)
@@ -269,6 +272,7 @@ def run(cfg: ClipTrainConfig) -> ClipModelMeta:
                 model_version=f"clips-v1-{name}",
                 metrics=test_metrics,
                 finetune=cfg.finetune,
+                train_class_ratio=train_ratio,
             )
 
     assert best_meta is not None and best_model is not None

@@ -45,6 +45,22 @@ def _jpg_base64(frame_rgb: np.ndarray) -> str:
     return base64.b64encode(buffer.tobytes()).decode("ascii")
 
 
+def classify_clip(
+    model,
+    meta: ClipModelMeta,
+    video_bytes: bytes,
+    device: torch.device | None,
+    suffix: str = ".mp4",
+):
+    """Lightweight serving path: video → frames → ``(label, proba)`` (no Grad-CAM).
+
+    Used by ``/predict/clip/batch``: computing Grad-CAM overlays per frame for every clip in a
+    batch would be prohibitively heavy, so batch only returns the class + probabilities.
+    """
+    frames = frames_from_video(video_bytes, meta.k, meta.frame_size, suffix=suffix)
+    return predict_clip(model, meta, frames, device)
+
+
 def serve_clip(
     model,
     meta: ClipModelMeta,

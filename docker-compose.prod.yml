@@ -15,7 +15,6 @@ services:
     image: 625067806263.dkr.ecr.us-east-1.amazonaws.com/soccer-net/api:latest
     environment:
       API_LOG_LEVEL: info
-      API_MODEL_DIR: /app/models/v0
       API_CLIP_MODEL_DIR: /app/models/clips-v1
     healthcheck:
       test:

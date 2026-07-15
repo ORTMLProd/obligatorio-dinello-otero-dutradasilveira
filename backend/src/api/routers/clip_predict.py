@@ -6,9 +6,14 @@ from pathlib import Path
 
 from fastapi import APIRouter, HTTPException, Request, UploadFile
 
-from src.api.schemas import ClipPredictResponse, GradcamFrame
+from src.api.schemas import (
+    ClipBatchItem,
+    ClipBatchPredictResponse,
+    ClipPredictResponse,
+    GradcamFrame,
+)
 from src.monitoring.metrics import record_prediction
-from src.serving.clip_inference import serve_clip
+from src.serving.clip_inference import classify_clip, serve_clip
 
 router = APIRouter(tags=["inference"])
 
@@ -43,3 +48,36 @@ async def predict_clip_endpoint(request: Request, video: UploadFile) -> ClipPred
         model_version=meta.model_version,
         gradcam=[GradcamFrame(frame_index=i, image_base64=b) for i, b in enumerate(overlays)],
     )
+
+
+@router.post("/predict/clip/batch", response_model=ClipBatchPredictResponse)
+async def predict_clip_batch_endpoint(
+    request: Request, videos: list[UploadFile]
+) -> ClipBatchPredictResponse:
+    """Classify several uploaded clips in one call (sync). Returns class + probabilities per
+    clip, aligned with the upload order. No Grad-CAM (too heavy per clip in bulk)."""
+    model, meta, device = _require_clip(request)
+    if not videos:
+        raise HTTPException(status_code=422, detail="no video files uploaded")
+    items: list[ClipBatchItem] = []
+    for video in videos:
+        data = await video.read()
+        if not data:
+            raise HTTPException(status_code=422, detail=f"empty video upload: {video.filename}")
+        suffix = Path(video.filename or "").suffix or ".mp4"
+        try:
+            label, proba = classify_clip(model, meta, data, device, suffix=suffix)
+        except (FileNotFoundError, ValueError) as exc:
+            raise HTTPException(
+                status_code=422, detail=f"could not read video {video.filename}: {exc}"
+            ) from exc
+        record_prediction(label, meta.model_version)
+        items.append(
+            ClipBatchItem(
+                filename=video.filename,
+                predicted_label=label,
+                probabilities=dict(zip(meta.classes, proba.tolist(), strict=True)),
+                model_version=meta.model_version,
+            )
+        )
+    return ClipBatchPredictResponse(predictions=items)

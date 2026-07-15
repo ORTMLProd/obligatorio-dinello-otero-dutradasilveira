@@ -8,7 +8,7 @@ preprocess identically (invariant 3). ``predict_clip`` is the single shared infe
 
 from __future__ import annotations
 
-from dataclasses import asdict, dataclass
+from dataclasses import asdict, dataclass, field
 from pathlib import Path
 
 import numpy as np
@@ -33,6 +33,8 @@ class ClipModelMeta:
     model_version: str
     metrics: dict
     finetune: bool = False
+    # Train-split class distribution — the drift baseline the monitoring uses (Fase 3.4).
+    train_class_ratio: dict = field(default_factory=dict)
 
 
 def save_clip_bundle(model, meta: ClipModelMeta, model_dir: Path) -> Path:
