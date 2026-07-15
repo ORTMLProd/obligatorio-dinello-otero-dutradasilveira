@@ -212,11 +212,39 @@ La documentación Swagger se genera automáticamente y cuidamos las descripcione
 
 ## 7. Deploy en AWS
 
-Desplegamos todo el stack en AWS Elastic Beanstalk usando su plataforma Docker, que corre el mismo `docker compose` que usamos en local, en una instancia EC2. Las imágenes de la API y el frontend se buildean y se suben a ECR, y el modelo entrenado se hornea dentro de la imagen de la API, porque la carpeta de modelos está fuera del control de versiones por el NDA y en Elastic Beanstalk no hay un host donde montarla.
+Desplegamos todo el stack en AWS Elastic Beanstalk usando su plataforma Docker, que corre el mismo `docker compose` que usamos en local, en una instancia EC2. Las imágenes de la API y el frontend se buildean y se suben a ECR, y el modelo entrenado se se ejecuta dentro de la imagen de la API, porque la carpeta de modelos está fuera del control de versiones por el NDA y en Elastic Beanstalk no hay un host donde montarla.
 
-La cuenta que usamos es de AWS Academy (un Learner Lab), que tiene sus limitaciones: no deja crear roles de IAM y las credenciales expiran cada pocas horas. Tuvimos un problema en la primera ejecución, donde la instancia quedó sin arrancar. Lo diagnosticamos sin abrir SSH, usando AWS Systems Manager para ver el estado real de la máquina, y confirmamos que el bootstrap había muerto justo en la ventana en que las credenciales del lab se cancelaron. Terminamos la instancia para que el Auto Scaling Group lanzara una de reemplazo, que arrancó limpia. Al final el entorno quedó funcionando de punta a punta, verificado con requests reales a los cinco servicios.
+La cuenta utilizada en AWS es del tipo Learner Lab, que tiene sus limitaciones: no deja crear roles de IAM y las credenciales expiran cada pocas horas. Tuvimos un problema en la primera ejecución, donde la instancia quedó sin arrancar. Lo diagnosticamos sin abrir SSH, usando AWS Systems Manager para ver el estado real de la máquina, y confirmamos que el bootstrap había fallado en el momento que las credenciales de AWS habían expirado. Se volvió a lanzar el proceso, con nuevas credenciales. Finalmente el ambiente se desplegó quedando operativo.
 
-Al momento de escribir esto el entorno sigue en pie, así que el frontend se puede probar en vivo en http://soccer-net-prod.eba-cyqdfnnq.us-east-1.elasticbeanstalk.com.
+Al momento de escribir este informe, el entorno aún continua operativo en la siguiente URL: http://soccer-net-prod.eba-cyqdfnnq.us-east-1.elasticbeanstalk.com.
+
+A continuación, se detallan las particularidades del despliegue en AWS.
+
+### Repositorios
+
+Para poder realizar un despliegue en EBS, fue necesario crear repositorios en ECR para que las imágenes referenciadas en el docker-compose, fueran de recursos sobre AWS. Por lo tanto, las imágenes se construyeron en nuestros entornos locales (mediate docker build) y posteriormente fueron "pusheadas" a los repositorios mencionados.
+
+<p align="center"><img src="figures/repositories.png" alt="Documentación Swagger de la API"></p>
+
+### Creación de apliación y embiente en EBS
+
+Para alojar la aplicación, fue necesario crear un ambiente y aplicación en EBS. Mediante las configuraciones por defecto, se pudo facilmente crear el entorno para poder "deployar" la aplicación.
+
+A continuación, se muestra una imagen del ambiente, y deploy sobre EBS
+
+<p align="center"><img src="figures/environment.png" alt="Ambiente EBS"></p>
+
+<p align="center"><img src="figures/deploy.png" alt="Log deploy sobre EBS"></p>
+
+Si bien existía la posibilidad de realizar el despliegue en diversas instancias EC2, por tratarse de un proyecto académico y por las características de la carga de la aplicación, no fue necesario distribuir la carga de los servicios en diferentes instancias. Por simplificación, se optó por desplegar todos los contenedores que componen a la solución en una única instancia EC2.
+
+A continuación, se muestra una imagen de la instancia utilizada para el deploy de los contenedores.
+
+<p align="center"><img src="figures/instances.png" alt="Instancia EC2 utilizada para deploy"></p>
+
+Por último, compartimos un screenshot de la aplición desplegada sobre AWS.
+
+<p align="center"><img src="figures/site.png" alt="Imagen del sitio productivo sobre AWS"></p>
 
 ---
 
