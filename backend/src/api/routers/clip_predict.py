@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import time
 from pathlib import Path
 
 from fastapi import APIRouter, HTTPException, Request, UploadFile
@@ -12,7 +13,7 @@ from src.api.schemas import (
     ClipPredictResponse,
     GradcamFrame,
 )
-from src.monitoring.metrics import record_prediction
+from src.monitoring.metrics import observe_latency, record_prediction
 from src.serving.clip_inference import classify_clip, serve_clip
 
 router = APIRouter(tags=["inference"])
@@ -37,10 +38,12 @@ async def predict_clip_endpoint(request: Request, video: UploadFile) -> ClipPred
     if not data:
         raise HTTPException(status_code=422, detail="empty video upload")
     suffix = Path(video.filename or "").suffix or ".mp4"
+    t0 = time.perf_counter()
     try:
         label, proba, overlays = serve_clip(model, meta, data, device, suffix=suffix)
     except (FileNotFoundError, ValueError) as exc:
         raise HTTPException(status_code=422, detail=f"could not read video: {exc}") from exc
+    observe_latency(time.perf_counter() - t0)
     record_prediction(label, meta.model_version)
     return ClipPredictResponse(
         predicted_label=label,
@@ -65,12 +68,14 @@ async def predict_clip_batch_endpoint(
         if not data:
             raise HTTPException(status_code=422, detail=f"empty video upload: {video.filename}")
         suffix = Path(video.filename or "").suffix or ".mp4"
+        t0 = time.perf_counter()
         try:
             label, proba = classify_clip(model, meta, data, device, suffix=suffix)
         except (FileNotFoundError, ValueError) as exc:
             raise HTTPException(
                 status_code=422, detail=f"could not read video {video.filename}: {exc}"
             ) from exc
+        observe_latency(time.perf_counter() - t0)
         record_prediction(label, meta.model_version)
         items.append(
             ClipBatchItem(
