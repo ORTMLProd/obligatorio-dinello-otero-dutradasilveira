@@ -44,6 +44,14 @@ CLAUDE.md
 # ── Notas internas / consigna (no aportan al entregable del repo) ────────────
 docs/
 
+# ── Figuras del informe ──────────────────────────────────────────────────────
+# Se versionan (sobreescriben el *.png global de arriba), menos las de Grad-CAM
+# que muestran frames de SoccerNet (NDA): esas se hornean en el PDF, pero el frame
+# crudo no va a git. El PDF del informe tampoco (tiene los frames embebidos).
+!report/figures/*.png
+report/figures/gradcam_*.png
+report/informe.pdf
+
 # ── Playwright MCP (capturas/snapshots de verificación) ─────────────────────
 .playwright-mcp/
 
