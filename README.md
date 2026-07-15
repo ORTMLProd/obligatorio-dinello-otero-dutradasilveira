@@ -1,17 +1,20 @@
 # Clasificador de Eventos SoccerNet — ML en Producción (Obligatorio)
 
-Sistema de ML end-to-end que clasifica ventanas de video de partidos de fútbol en
-tipos de evento (`goal`, `card`, `substitution`, `corner`, `background`), combinando
-**frames** extraídos de los videos de SoccerNet con **features tabulares** point-in-time
-(minuto, mitad, diferencia de score acumulada, liga, etc.).
+Sistema de ML end-to-end que clasifica **clips de video** de partidos de fútbol en tipos de
+evento (`goal`, `card`, `substitution`, `corner`, `background`). El modelo de producción es
+una **CNN multi-frame** (ResNet18 fine-tuneada + pooling temporal + cabeza MLP) que recibe un
+clip subido y devuelve la clase, las probabilidades por clase y un **overlay de Grad-CAM** por
+frame.
 
 Curso: Machine Learning en Producción — Máster, Universidad ORT Uruguay.
 
-> **Estado: Fase 2 (Baseline end-to-end) — completa.** Modelo v0 (XGBoost sobre late
-> fusion `[tabular point-in-time ⊕ embedding ResNet pooled]`), trazabilidad con MLflow
-> (experimentos + Model Registry), API FastAPI con `/predict` y `/predict/batch`, y el
-> stack completo en Docker Compose. Esto satisface el mínimo del obligatorio. El plan de
-> fases completo está en [CLAUDE.md](CLAUDE.md).
+> **Estado.** Modelo de video `clips-v1` (CNN visual-only fine-tuneada, **test macro-F1 0.757**
+> sobre 44 partidos de 6 ligas), trazabilidad con MLflow (experimentos + Model Registry),
+> API FastAPI con `/predict/clip` (+ `/predict` y `/predict/batch` del baseline tabular),
+> frontend React de upload de video con Grad-CAM, y el stack completo en Docker Compose
+> (api + frontend + mlflow + prometheus + grafana). Un baseline tabular `v0` (XGBoost sobre
+> `[tabular point-in-time ⊕ embedding ResNet pooled]`) cerró el ciclo end-to-end inicial y se
+> conserva como referencia. El plan de fases completo está en [CLAUDE.md](CLAUDE.md).
 
 ## Política de datos (NDA)
 
@@ -24,27 +27,43 @@ propia contraseña del NDA. Detalle completo en [CLAUDE.md](CLAUDE.md).
 
 ## Cómo correr
 
-### 0. Construir el dataset (requiere contraseña del NDA para los videos; el camino liviano usa features pre-extraídas)
+### 0. Construir el dataset
+
+El dataset de partidos está definido por `configs/dataset.yaml` (`game_ids` explícito: 32 de
+la Premier League + 12 cross-liga de LaLiga, Champions, Serie A, Bundesliga y Ligue 1).
 
 ```bash
 cd backend
+# Descarga labels + features + videos 224p (los videos requieren SOCCERNET_PASSWORD, NDA)
 uv run --group data python -m src.data.download --config ../configs/dataset.yaml
+# Splits por game_id (anti data-leakage) + dataset de clips (extrae K frames por ventana)
+uv run --group data python -m src.data.splits --config ../configs/dataset.yaml
+uv run --group data python -m src.data.build_clips --config ../configs/dataset.yaml
+# → data/processed/clips_manifest.parquet + frames (gitignored)
+
+# (Opcional) baseline tabular v0, sin videos ni NDA (usa features ResNet pre-extraídas):
 uv run --group data python -m src.data.build_dataset --config ../configs/dataset.yaml
-# genera data/processed/{manifest.parquet, resnet_pooled.npy} (gitignored)
 ```
 
-### 1. Entrenar el baseline v0 (loguea a MLflow, exporta el modelo)
+### 1. Entrenar el modelo de video (loguea a MLflow, exporta el bundle)
 
 ```bash
-cd backend
-uv sync --group ml
-# Local (sqlite, sin servidor): runs + registry en backend/mlflow.db
+cd backend && uv sync --group ml
+# CNN de clips: entrena la cabeza + fine-tune de layer4, registra en el Model Registry
+# (soccernet-events-clips-v1) y exporta models/clips-v1/clip_model.pt
+uv run python -m src.models.train_clips --config ../configs/train_clips.yaml
+
+# (Opcional) baseline tabular v0 (LogReg/XGBoost + tuning Optuna):
 uv run python -m src.models.train --config ../configs/train.yaml
-# ...o apuntando al MLflow del compose (ver abajo): MLFLOW_TRACKING_URI=http://localhost:5500
 ```
 
-Entrena LogReg y XGBoost, reporta métricas por clase (F1, PR-AUC) y exporta el mejor a
-`models/v0/model.joblib` (el bundle que carga la API: modelo + preprocesador fiteado).
+Optimización medida (electivo): además de la data augmentation (medida dentro de
+`train_clips`), la **quantization int8** del backbone se evalúa con:
+
+```bash
+uv run python -m src.models.quantize --config ../configs/train_clips.yaml
+# reporta latencia, tamaño y macro-F1 FP32 vs int8, y loguea a MLflow
+```
 
 ### 2. Levantar todo el stack con Docker
 
@@ -52,36 +71,35 @@ Entrena LogReg y XGBoost, reporta métricas por clase (F1, PR-AUC) y exporta el 
 docker compose up --build
 ```
 
-- **Frontend:** http://localhost:8080 — estado del backend.
+- **Frontend:** http://localhost:8080 — subir un clip de video → clase + barras de probabilidad
+  + overlay de Grad-CAM.
 - **API:** http://localhost:8000 — Swagger en [`/docs`](http://localhost:8000/docs).
-- **MLflow UI:** http://localhost:5500 — experimentos + Model Registry (puerto 5500 porque
-  en macOS el 5000 lo toma AirPlay).
+- **MLflow UI:** http://localhost:5500 — experimentos + Model Registry (puerto 5500 porque en
+  macOS el 5000 lo toma AirPlay).
+- **Grafana:** http://localhost:3000 · **Prometheus:** http://localhost:9090 (monitoreo).
 
-La API carga el modelo de `models/v0` (montado read-only). Si todavía no entrenaste,
-`/predict` responde **503** y `/model-info` reporta `model_loaded: false`. Para que el
-training registre en el MLflow del compose: `docker compose up -d`, después entrenar con
-`MLFLOW_TRACKING_URI=http://localhost:5500`, y `docker compose restart api` para recargar
-el modelo recién exportado.
+La API carga los modelos de `models/` (montado read-only): `models/clips-v1` para `/predict/clip`
+y `models/v0` para `/predict`. Si un modelo no está entrenado, su endpoint responde **503**.
+Para que el training registre en el MLflow del compose: `docker compose up -d`, entrenar con
+`MLFLOW_TRACKING_URI=http://localhost:5500`, y `docker compose restart api` para recargar el
+modelo recién exportado.
 
 ### Endpoints de inferencia
 
-`POST /predict` recibe las features tabulares point-in-time + el embedding ResNet
-**pre-extraído** (`resnet_features`, 512-d). En v0 el contrato es el embedding, no la
-imagen cruda: el modelo se entrena con las features ResNet+PCA de SoccerNet, que no se
-pueden reproducir desde pixeles en serving — consumir el mismo embedding evita el
-*training-serving skew*. La ingesta de imagen real llega en v1 (CNN propia).
+**`POST /predict/clip`** (producto) — recibe un archivo de video (multipart, campo `video`),
+muestrea K frames y devuelve la clase, las probabilidades y un overlay de Grad-CAM por frame:
 
 ```bash
-curl -s http://localhost:8000/predict -H 'content-type: application/json' -d '{
-  "half": 2, "minute": 44, "score_diff": 1, "league": "england_epl",
-  "team_is_home": 1, "visible": 1, "events_so_far": 27, "secs_since_last_event": 18.0,
-  "resnet_features": [0.0, 0.0, "...512 floats..."]
-}'
-# → {"predicted_label": "...", "probabilities": {...}, "model_version": "v0-xgboost-..."}
+curl -s -F "video=@un_clip.mp4" http://localhost:8000/predict/clip
+# → {"predicted_label": "corner", "probabilities": {...},
+#    "model_version": "clips-v1-clips-aug-ft", "gradcam": [{"frame_index": 0, ...}, ...]}
 ```
 
-`POST /predict/batch` recibe `{"items": [<PredictRequest>, ...]}` y devuelve una lista
-alineada de resultados (síncrono en v0). Los mismos schemas pydantic respaldan ambos.
+**`POST /predict`** y **`POST /predict/batch`** (baseline tabular v0) — reciben las features
+tabulares point-in-time + el embedding ResNet **pre-extraído** (`resnet_features`, 512-d);
+`/predict/batch` recibe `{"items": [...]}` y devuelve una lista alineada. Consumir el mismo
+embedding pre-extraído (en vez de la imagen cruda) evita el *training-serving skew* en v0.
+Los mismos schemas pydantic (`extra="forbid"`) respaldan online y batch.
 
 ### Desarrollo local (sin Docker)
 
@@ -105,9 +123,10 @@ buildean localmente y se pushean a ECR; `mlflow` se buildea en la propia instanc
 (no tiene ECR repo propio); `prometheus`/`grafana` pullean sus imágenes públicas.
 
 Requisitos: credenciales AWS válidas (`aws sts get-caller-identity`), EB CLI (`eb
---version`), Docker con soporte `buildx`, y un modelo entrenado en `models/v0` (y
-`models/clips-v1` para el flujo de video) — el `Dockerfile.deploy.api` lo hornea en la
-imagen porque `models/` está gitignored (NDA) y en EB no hay host para bind-mountearlo.
+--version`), Docker con soporte `buildx`, y los modelos entrenados en `models/v0` y
+`models/clips-v1` — el `Dockerfile.deploy.api` los **hornea en la imagen** (ambos, incluido
+el modelo de video para `/predict/clip`) porque `models/` está gitignored (NDA) y en EB no
+hay host para bind-mountearlo.
 
 **Nota — cuenta AWS Academy Learner Lab:** esta cuenta (`625067806263`) es un Learner
 Lab (rol asumido `voclabs`), que **no permite crear ni modificar roles IAM**
@@ -136,7 +155,8 @@ eb init -p docker soccer-net --region us-east-1
 eb create soccer-net-prod --single --instance-type t3.medium \
   --instance-profile LabInstanceProfile --service-role LabRole
 
-# 3. Deploy (usa docker-compose.prod.yml, ver scripts/deploy_eb.sh)
+# 3. Deploy (usa docker-compose.prod.yml, ver scripts/deploy_eb.sh). Si el entorno ya
+#    existe, este paso solo redeploya las imágenes nuevas (incluido el modelo de video).
 scripts/deploy_eb.sh soccer-net-prod
 ```
 
@@ -154,10 +174,10 @@ pisar el archivo de dev.
 ## Estructura
 
 ```
-backend/   API FastAPI + datos, features, modelos (train/evaluate/export)
-frontend/  React (Vite) + Tailwind
+backend/   API FastAPI + datos, features, modelos (train/evaluate/export/quantize)
+frontend/  React (Vite) + Tailwind — upload de video → clase + Grad-CAM
 mlflow/    imagen del servidor de tracking de MLflow (Electivo 1)
-configs/   YAML de configuración (dataset, train, api) — pydantic-settings
+configs/   YAML de configuración (dataset, train, train_clips, api) — pydantic-settings
 docs/      consigna y documentación
-report/    bitácora pedagógica + métricas + (Fase 4) informe
+report/    bitácora pedagógica + métricas + ejemplos de inferencia + (Fase 4) informe
 ```
