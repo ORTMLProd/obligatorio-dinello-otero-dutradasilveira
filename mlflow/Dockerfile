@@ -22,4 +22,4 @@ CMD ["mlflow", "server", \
      "--backend-store-uri", "sqlite:////mlflow/mlflow.db", \
      "--serve-artifacts", \
      "--artifacts-destination", "/mlflow/artifacts", \
-     "--allowed-hosts", "localhost,127.0.0.1,*.elasticbeanstalk.com,*.elasticbeanstalk.com:5500"]
+     "--allowed-hosts", "localhost,127.0.0.1,localhost:5500,127.0.0.1:5500,*.elasticbeanstalk.com,*.elasticbeanstalk.com:5500"]
