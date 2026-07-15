@@ -63,6 +63,7 @@ class ClipClassifier(nn.Module):
         pooling: str = "mean",
         pretrained: bool = True,
         finetune: bool = False,
+        finetune_blocks: list[str] | None = None,
     ) -> None:
         # Lazy import: keeps torchvision.models out of the module namespace until
         # a model is actually instantiated (avoids MPS init at collection time).
@@ -78,12 +79,13 @@ class ClipClassifier(nn.Module):
             p.requires_grad_(False)
         self.finetune = finetune
         if finetune:
-            # Unfreeze the last residual block so it can learn soccer-specific features
+            # Unfreeze the given residual blocks so they learn soccer-specific features
             # (frozen ImageNet features localise poorly — see Grad-CAM). BatchNorm keeps
             # its frozen running stats (backbone stays in eval() via train() below) for
-            # stability on the small dataset; only layer4's weights are optimized.
-            for p in backbone.layer4.parameters():
-                p.requires_grad_(True)
+            # stability on the small dataset; only the selected blocks' weights are optimized.
+            for block in finetune_blocks or ["layer4"]:
+                for p in getattr(backbone, block).parameters():
+                    p.requires_grad_(True)
         backbone.eval()
         self.backbone = backbone
         self.pooling = pooling
@@ -122,8 +124,11 @@ def build_clip_model(
     backbone: str = "resnet18",
     pretrained: bool = True,
     finetune: bool = False,
+    finetune_blocks: list[str] | None = None,
 ) -> ClipClassifier:
     """Build the clip classifier. Only ``resnet18`` is supported for now."""
     if backbone != "resnet18":
         raise ValueError(f"unsupported backbone {backbone!r}; only 'resnet18'")
-    return ClipClassifier(n_classes, hidden, dropout, pooling, pretrained, finetune)
+    return ClipClassifier(
+        n_classes, hidden, dropout, pooling, pretrained, finetune, finetune_blocks
+    )

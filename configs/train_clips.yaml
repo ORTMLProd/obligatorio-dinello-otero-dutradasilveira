@@ -24,6 +24,9 @@ augment: true
 # se entrena solo la variante augmentada y se compara contra el baseline congelado.
 finetune: true
 finetune_lr: 0.0001
+# Descongelar layer3+layer4 se probó y dio peor validación (0.648 vs 0.708): más
+# parámetros overfitean con el dataset chico. Se conserva solo layer4.
+finetune_blocks: ["layer4"]
 
 # Normalización ImageNet (el backbone es pre-entrenado). Se serializa con el bundle.
 normalize:

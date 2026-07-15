@@ -72,6 +72,7 @@ class ClipTrainConfig(BaseModel):
     # ``finetune_lr`` is the (lower) LR applied to the unfrozen backbone params.
     finetune: bool = False
     finetune_lr: float = Field(default=1e-4, gt=0)
+    finetune_blocks: list[str] = Field(default_factory=lambda: ["layer4"])
     normalize: NormalizeConfig
     mlflow: ClipMLflowConfig
     paths: ClipPathsConfig

@@ -199,6 +199,7 @@ def run(cfg: ClipTrainConfig) -> ClipModelMeta:
             cfg.pooling,
             cfg.backbone,
             finetune=cfg.finetune,
+            finetune_blocks=cfg.finetune_blocks,
         )
         model, val_f1 = fit(
             model,
@@ -224,6 +225,7 @@ def run(cfg: ClipTrainConfig) -> ClipModelMeta:
                     "augment": augment,
                     "finetune": cfg.finetune,
                     "finetune_lr": cfg.finetune_lr if cfg.finetune else None,
+                    "finetune_blocks": ",".join(cfg.finetune_blocks) if cfg.finetune else None,
                     "lr": cfg.train.lr,
                     "epochs": cfg.train.epochs,
                     "batch_size": cfg.train.batch_size,
