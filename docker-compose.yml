@@ -8,12 +8,11 @@ services:
       - "8000:8000"
     environment:
       API_LOG_LEVEL: info
-      # The trained bundle is produced on the host and mounted in (models/ is gitignored,
-      # never baked into the image). Absolute path → used as-is by resolved_model_dir().
-      API_MODEL_DIR: /app/models/v0
+      # The trained clip bundle is produced on the host and mounted in (models/ is gitignored,
+      # never baked into the image). Absolute path → used as-is by resolved_clip_model_dir().
       API_CLIP_MODEL_DIR: /app/models/clips-v1
     volumes:
-      # Read-only mount of the exported model. If empty (before training) /predict → 503.
+      # Read-only mount of the exported model. If empty (before training) /predict/clip → 503.
       - ./models:/app/models:ro
     healthcheck:
       # `python` (urllib) instead of curl, which is not present in python:3.12-slim.

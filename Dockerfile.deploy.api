@@ -1,9 +1,9 @@
 # syntax=docker/dockerfile:1
 # Variante de deploy de backend/Dockerfile: mismo build, pero además hornea el
-# modelo entrenado (models/v0, models/clips-v1). En local ese directorio se
-# monta como bind-mount (ver docker-compose.yml) porque está gitignored por el
-# NDA; en EB no hay host con el modelo, así que para este deploy se copia
-# adentro de la imagen. Contexto: raíz del repo (necesita backend/ y models/).
+# modelo de video entrenado (models/clips-v1). En local ese directorio se monta
+# como bind-mount (ver docker-compose.yml) porque está gitignored por el NDA; en
+# EB no hay host con el modelo, así que para este deploy se copia adentro de la
+# imagen. Contexto: raíz del repo (necesita backend/ y models/).
 
 FROM ghcr.io/astral-sh/uv:python3.12-bookworm-slim AS builder
 ENV UV_COMPILE_BYTECODE=1 \
@@ -23,11 +23,10 @@ FROM python:3.12-slim-bookworm
 RUN groupadd --system --gid 999 nonroot \
     && useradd --system --gid 999 --uid 999 --create-home nonroot
 COPY --from=builder --chown=nonroot:nonroot /app /app
-COPY --chown=nonroot:nonroot models/v0 /app/models/v0
-# models/clips-v1 (modelo de video) todavía no se entrenó en esta sesión — se deja
-# comentado hasta que exista; API_CLIP_MODEL_DIR queda apuntando a un path vacío y
-# /predict/clip responde 503 hasta el próximo deploy con ese modelo horneado.
-# COPY --chown=nonroot:nonroot models/clips-v1 /app/models/clips-v1
+# Modelo de video (CNN de clips fine-tuneado, ~43MB): se hornea en la imagen porque
+# models/ está gitignored (NDA) y en EB no hay host para bind-mountearlo. Habilita
+# /predict/clip y /predict/clip/batch en producción.
+COPY --chown=nonroot:nonroot models/clips-v1 /app/models/clips-v1
 ENV PATH="/app/.venv/bin:$PATH" \
     TORCH_HOME="/app/.torch" \
     OMP_NUM_THREADS=1

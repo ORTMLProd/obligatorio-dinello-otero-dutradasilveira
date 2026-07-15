@@ -61,3 +61,26 @@ def test_predict_clip_503_when_no_model(tmp_path) -> None:
         "/predict/clip", files={"video": ("clip.avi", data, "video/x-msvideo")}
     )
     assert resp.status_code == 503
+
+
+def test_predict_clip_batch_returns_aligned_predictions(tmp_path) -> None:
+    _inject_clip_model()
+    try:
+        d1 = _video_bytes(tmp_path / "a.avi")
+        d2 = _video_bytes(tmp_path / "b.avi")
+        resp = TestClient(app).post(
+            "/predict/clip/batch",
+            files=[
+                ("videos", ("a.avi", d1, "video/x-msvideo")),
+                ("videos", ("b.avi", d2, "video/x-msvideo")),
+            ],
+        )
+    finally:
+        app.state.clip_model = app.state.clip_meta = app.state.clip_device = None
+    assert resp.status_code == 200
+    preds = resp.json()["predictions"]
+    assert [p["filename"] for p in preds] == ["a.avi", "b.avi"]
+    for p in preds:
+        assert p["predicted_label"] in CLASSES
+        assert set(p["probabilities"]) == set(CLASSES)
+        assert "gradcam" not in p  # batch omits Grad-CAM

@@ -37,8 +37,12 @@ __pycache__/
 node_modules/
 dist/
 
-# ── Claude Code (local, por máquina) ────────────────────────────────────────
-.claude/settings.local.json
+# ── Claude Code + tooling e instrucciones (no van al remoto) ────────────────
+.claude/
+CLAUDE.md
+
+# ── Notas internas / consigna (no aportan al entregable del repo) ────────────
+docs/
 
 # ── Playwright MCP (capturas/snapshots de verificación) ─────────────────────
 .playwright-mcp/

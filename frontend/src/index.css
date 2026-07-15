@@ -532,6 +532,57 @@ body {
   color: var(--board);
 }
 
+.batch-files {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  align-items: center;
+  margin: 12px 0;
+}
+.batch-scroll {
+  overflow-x: auto;
+}
+.batch-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 0.9rem;
+}
+.batch-table th {
+  text-align: left;
+  color: var(--chalk-dim);
+  font-weight: 600;
+  font-size: 0.72rem;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  padding: 8px 10px;
+  border-bottom: 1px solid var(--line);
+}
+.batch-table td {
+  padding: 10px;
+  border-bottom: 1px solid var(--line);
+}
+.batch-table .fn {
+  color: var(--chalk-dim);
+  max-width: 260px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.batch-table .cf {
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+}
+.tag {
+  display: inline-block;
+  padding: 3px 10px;
+  border-radius: 999px;
+  background: rgba(126, 224, 129, 0.12);
+  border: 1px solid var(--line);
+  color: var(--lime);
+  font-weight: 600;
+  font-size: 0.82rem;
+}
+
 .dropzone {
   width: 100%;
   border: 1.5px dashed var(--line);

@@ -1,21 +1,21 @@
 {
   "seed": 42,
-  "n_games": 16,
-  "n_clips": 1140,
+  "n_games": 44,
+  "n_clips": 3087,
   "k": 8,
   "clip_seconds": 8.0,
   "frame_size": 224,
   "class_counts": {
-    "corner": 185,
-    "goal": 45,
-    "card": 64,
-    "substitution": 86,
-    "background": 760
+    "corner": 462,
+    "goal": 142,
+    "card": 179,
+    "substitution": 246,
+    "background": 2058
   },
   "split_counts": {
-    "test": 186,
-    "train": 762,
-    "val": 192
+    "train": 1791,
+    "test": 621,
+    "val": 675
   },
-  "content_sha256": "d7ee072dd7afafeea1a80efd45d477c2fddcb987e310486f940f0ccc31a748e0"
+  "content_sha256": "11257b5e0c1bb610e7999496a2d9e59b8d25f9bd77a89a4cd8c54f0a334d9d78"
 }

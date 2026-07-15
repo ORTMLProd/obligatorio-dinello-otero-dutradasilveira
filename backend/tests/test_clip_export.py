@@ -1,4 +1,5 @@
 import numpy as np
+import torch
 
 from src.models.clip_export import ClipModelMeta, load_clip_bundle, predict_clip, save_clip_bundle
 from src.models.clip_model import build_clip_model
@@ -37,3 +38,24 @@ def test_save_load_predict_roundtrip(tmp_path) -> None:
     assert label in CLASSES
     assert proba.shape == (5,)
     assert abs(float(proba.sum()) - 1.0) < 1e-5
+
+
+def test_finetune_bundle_preserves_backbone_weights(tmp_path) -> None:
+    """A fine-tuned model changes layer4; the bundle must save/restore those weights, else
+    serving would rebuild an ImageNet backbone (training-serving skew, invariant 3)."""
+    meta = _meta()
+    meta.finetune = True
+    model = build_clip_model(
+        len(CLASSES), hidden=32, pooling="mean", pretrained=False, finetune=True
+    )
+    with torch.no_grad():  # mutate layer4 so it differs from a fresh rebuild
+        for p in model.backbone.layer4.parameters():
+            p.add_(1.0)
+    save_clip_bundle(model, meta, tmp_path)
+
+    reloaded, meta2 = load_clip_bundle(tmp_path)
+    assert meta2.finetune is True
+    for p_orig, p_new in zip(
+        model.backbone.layer4.parameters(), reloaded.backbone.layer4.parameters(), strict=True
+    ):
+        assert torch.allclose(p_orig, p_new)

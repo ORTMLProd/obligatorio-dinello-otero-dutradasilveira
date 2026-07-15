@@ -1309,3 +1309,81 @@ stack corriendo y verificados con tráfico real. URL:
 Diagnóstico vía SSM y decisión de terminar la instancia hechos por Claude Code, con
 confirmación explícita del usuario antes de la acción destructiva (`terminate-instances`).
 Validación final de los 5 endpoints hecha por el asistente con requests reales.
+
+---
+
+## 2026-07-14 — Electivos y mejora del modelo de imágenes (CNN de clips)
+
+### Qué se hizo
+Sesión enfocada en **consolidar los electivos sobre el modelo de imágenes** (el CNN de clips,
+que es el producto real) y **mejorar sus resultados**. Rama `feat/cnn-electivos-mejoras`.
+
+1. **Trazabilidad (MLflow Model Registry):** el CNN ahora se **registra** en el registry
+   (`soccernet-events-clips-v1`), no solo como bundle en disco (antes el `register_model` vivía
+   solo en v0). Así el electivo de trazabilidad —versionar experimentos, datos y modelos— queda
+   validado sobre el modelo de imágenes, sin depender de v0.
+2. **Mejora del modelo (fine-tune del backbone):** se descongeló el último bloque (`layer4`) de
+   la ResNet18 con LR diferencial (backbone más bajo que la cabeza), config-driven. El bundle
+   ahora serializa los pesos del backbone cuando hay fine-tune (anti training-serving skew).
+   Resultado: **test macro-F1 0.640 → 0.672**. Se probó `layer3+layer4` y dio **peor
+   validación** (0.648 vs 0.708) → overfitting; se eligió `layer4` **por validación** (no por
+   test).
+3. **Más datos + corrección de sesgo:** se escaló 16 → 32 → **44 partidos**. Al ver que los
+   primeros 32 eran **todos EPL y Chelsea en 16/32** (sesgo de selección), se sumaron 12
+   partidos de **5 ligas más** (LaLiga, Champions, Serie A, Bundesliga, Ligue 1) vía `game_ids`
+   explícito reproducible. Resultado: **test 0.672 → 0.757** (val 0.708 → 0.804); `goal`
+   F1 0.564 → 0.717. El test ahora incluye partidos de ligas no vistas → mide generalización.
+4. **Optimización — 2ª sub-técnica (quantization):** static PTQ int8 del backbone (FX/qnnpack),
+   con **impacto medido**: tamaño **4x menor** (44.8→11.2 MB), F1 intacto (0.7567→0.7566), pero
+   latencia **3x más lenta en ARM/qnnpack** (sin kernels int8 optimizados). Hallazgo honesto:
+   la quantization es hardware-dependiente; en el host x86 de serving (fbgemm) el panorama
+   difiere. Se reporta como experimento, no se despliega por defecto.
+5. **Explicabilidad — fix de Grad-CAM:** se cambió la normalización de **por-frame a compartida**
+   entre los 8 frames del clip (la per-frame estiraba el ruido de frames de baja señal → "manchas
+   sin sentido"). Verificado: en un gol resalta el área/arco y a los jugadores festejando.
+6. **Ejemplos de inferencia:** set de clips demo desde el **split de test** (partidos no vistos),
+   incluidos 2 cross-liga; 7/8 correctos. **Caso destacado:** un clip externo de Champions con el
+   **cartel del cuarto árbitro** visible → el modelo predice `substitution` 0.91 y el **Grad-CAM
+   se enfoca en los números LED del cartel** (feature interpretable). Ver `report/inference_examples.md`.
+
+### Por qué se hizo así / concepto del curso
+- **Selección por validación, nunca por test** (data leakage): tanto en `layer3` vs `layer4`
+  como en la elección del mejor epoch. El caso `layer3` (mejor test pero peor val) es el ejemplo
+  didáctico de por qué no se mira test para elegir.
+- **Diversidad > cantidad:** más datos de la misma liga no arregla la generalización; el sesgo de
+  selección (tomar los primeros N de una lista agrupada) se corrige muestreando cross-liga.
+- **Medir el impacto de la optimización** (electivo): la quantization se evaluó en métricas ML,
+  latencia y tamaño — el resultado "no ayuda en latencia acá pero sí en tamaño" es una evaluación
+  válida y muestra que el impacto es hardware-dependiente.
+- **Anti training-serving skew:** al fine-tunear, los pesos del backbone cambian y deben
+  serializarse en el bundle (test de round-trip agregado), o el serving reconstruiría un backbone
+  ImageNet distinto.
+
+### Requerimiento de la consigna que cubre
+- **Electivos, todos validados sobre el modelo de imágenes:** Trazabilidad (MLflow registry +
+  manifest hasheado), Visualización (frontend + Grad-CAM), **Optimización con ≥2 sub-técnicas
+  medidas** (data augmentation + quantization), Explicabilidad (Grad-CAM, con evidencia del
+  cartel). AutoML no se usó (electivo no elegido; además mantenerlo afuera deja Visualización
+  como electivo que suma).
+
+### Alternativas consideradas y descartadas
+- **`layer3+layer4`** → peor validación (overfitting), descartado.
+- **Quedarse en 32 EPL** → se diversificó a 44 cross-liga por el sesgo de liga.
+- **Dynamic quantization** → descartada frente a static PTQ: solo cuantiza Linear (la cabeza),
+  no el backbone Conv que domina el cómputo.
+- **Baseline v0** → se deja fuera del relato del informe (no corre sobre un clip subido; su valor
+  fue cerrar el ciclo end-to-end, no ser el producto).
+
+### Referencias al código
+- `backend/src/models/{train_clips,clip_model,clip_config,clip_export,clip_gradcam,quantize}.py`,
+  `configs/{train_clips,dataset,splits}.yaml`, `report/inference_examples.md`.
+- Tests: `test_clip_export` (round-trip fine-tune), `test_quantize`, `test_leakage`.
+- Modelo final: `clips-v1-clips-aug-ft`, test macro-F1 **0.757**, MLflow `soccernet-events-clips-v1`.
+
+### Uso de IA generativa
+Sesión desarrollada con Claude Code: planificación de los electivos, implementación (fine-tune
+config-driven, módulo de quantization, fix de Grad-CAM) con TDD y lint, orquestación de las
+corridas reales (descargas NDA, reconstrucción del dataset, reentrenamientos) y verificación
+visual (Grad-CAM, frames). El estudiante tomó todas las decisiones de dirección (mejorar el
+modelo, diversificar cross-liga, aportar el clip del cartel) y validó cada resultado; es
+responsable de poder defenderlo.

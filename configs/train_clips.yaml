@@ -18,6 +18,16 @@ train:
 # Se entrena sin y con augmentation para medir el impacto (electivo de optimización).
 augment: true
 
+# Fine-tune: descongela el último bloque (layer4) del backbone para que aprenda features
+# de fútbol (mejora métricas y hace el Grad-CAM significativo). finetune_lr es el LR (más
+# bajo) de los params descongelados del backbone; la cabeza usa train.lr. Con finetune=true
+# se entrena solo la variante augmentada y se compara contra el baseline congelado.
+finetune: true
+finetune_lr: 0.0001
+# Descongelar layer3+layer4 se probó y dio peor validación (0.648 vs 0.708): más
+# parámetros overfitean con el dataset chico. Se conserva solo layer4.
+finetune_blocks: ["layer4"]
+
 # Normalización ImageNet (el backbone es pre-entrenado). Se serializa con el bundle.
 normalize:
   mean: [0.485, 0.456, 0.406]

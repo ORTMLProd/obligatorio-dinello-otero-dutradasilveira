@@ -15,11 +15,10 @@ from contextlib import asynccontextmanager
 from fastapi import FastAPI, Request
 
 from src import __version__
-from src.api.routers import clip_predict, health, metrics, model_info, predict
+from src.api.routers import clip_predict, health, metrics, model_info
 from src.config import get_settings
 from src.models.clip_export import load_clip_bundle
 from src.models.clip_model import pick_device
-from src.models.export import load_bundle
 from src.monitoring.logging import configure_inference_logging
 from src.monitoring.metrics import record_request, set_training_distribution
 
@@ -30,25 +29,18 @@ logger = logging.getLogger(__name__)
 async def lifespan(app: FastAPI) -> AsyncIterator[None]:
     # Structured inference logs to stdout (Fase 3.4) — configured once at startup.
     configure_inference_logging()
-    # Load the model bundle (estimator + fitted preprocessor) once at startup and keep it
-    # on app.state. The preprocessor is never re-fitted here (invariant 3). If no bundle is
-    # present (fresh deploy before training), the API still boots and /predict returns 503.
-    model_dir = get_settings().resolved_model_dir()
-    try:
-        app.state.bundle = load_bundle(model_dir)
-        logger.info("loaded model bundle from %s (%s)", model_dir, app.state.bundle.model_version)
-        # Publish the train-split class distribution as the drift baseline (Fase 3.4).
-        set_training_distribution(app.state.bundle.train_class_ratio)
-    except (FileNotFoundError, OSError):
-        app.state.bundle = None
-        logger.warning("no model bundle at %s — /predict will return 503", model_dir)
-    # Clip model (Fase 3.5). Loaded best-effort; /predict/clip returns 503 if absent.
+    # Load the clip model bundle once at startup and keep it on app.state. The eval transform
+    # is reconstructed from the serialized stats (invariant 3, no re-fit). If no bundle is
+    # present (fresh deploy before training), the API still boots and /predict/clip returns 503.
     clip_dir = get_settings().resolved_clip_model_dir()
     try:
         device = pick_device()
         app.state.clip_model, app.state.clip_meta = load_clip_bundle(clip_dir, device)
         app.state.clip_device = device
         logger.info("loaded clip model from %s (%s)", clip_dir, app.state.clip_meta.model_version)
+        # Publish the train-split class distribution as the drift baseline (Fase 3.4).
+        if app.state.clip_meta.train_class_ratio:
+            set_training_distribution(app.state.clip_meta.train_class_ratio)
     except (FileNotFoundError, OSError):
         app.state.clip_model = app.state.clip_meta = app.state.clip_device = None
         logger.warning("no clip model at %s — /predict/clip will return 503", clip_dir)
@@ -66,7 +58,6 @@ def create_app() -> FastAPI:
     )
     app.include_router(health.router)
     app.include_router(model_info.router)
-    app.include_router(predict.router)
     app.include_router(clip_predict.router)
     app.include_router(metrics.router)
 
