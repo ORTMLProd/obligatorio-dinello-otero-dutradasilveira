@@ -14,7 +14,7 @@ seed: 42
 # Subconjunto chico para cerrar el ciclo end-to-end. Escalar a 30-50 cambiando
 # solo `num_games`. `source_split` indica de qué split de SoccerNet tomamos la
 # lista de partidos; NO es nuestro split (re-particionamos por game_id, ver abajo).
-num_games: 16
+num_games: 32
 source_split: train
 game_ids: [] # si se completa, pisa num_games (lista explícita de partidos)
 
