@@ -14,7 +14,7 @@ Curso: Machine Learning en Producción — Máster, Universidad ORT Uruguay.
 > frontend React de upload de video con Grad-CAM, y el stack completo en Docker Compose
 > (api + frontend + mlflow + prometheus + grafana). Un baseline tabular `v0` (XGBoost sobre
 > `[tabular point-in-time ⊕ embedding ResNet pooled]`) cerró el ciclo end-to-end inicial y se
-> conserva como referencia. El plan de fases completo está en [CLAUDE.md](CLAUDE.md).
+> conserva como referencia.
 
 ## Política de datos (NDA)
 
@@ -23,7 +23,7 @@ KAUST. **Nunca** se versionan videos `.mkv`, frames/imágenes extraídas, ni la 
 del NDA. Las carpetas `data/` y `models/` están en `.gitignore`. La contraseña se lee de
 la variable de entorno `SOCCERNET_PASSWORD` (en `.env`, no versionado). El repo contiene
 solo **código, configs y manifests** que permiten regenerar el dataset a quien tenga su
-propia contraseña del NDA. Detalle completo en [CLAUDE.md](CLAUDE.md).
+propia contraseña del NDA.
 
 ## Cómo correr
 
@@ -178,6 +178,5 @@ backend/   API FastAPI + datos, features, modelos (train/evaluate/export/quantiz
 frontend/  React (Vite) + Tailwind — upload de video → clase + Grad-CAM
 mlflow/    imagen del servidor de tracking de MLflow (Electivo 1)
 configs/   YAML de configuración (dataset, train, train_clips, api) — pydantic-settings
-docs/      consigna y documentación
 report/    bitácora pedagógica + métricas + ejemplos de inferencia + (Fase 4) informe
 ```
